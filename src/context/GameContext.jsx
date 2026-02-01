@@ -404,77 +404,25 @@ function gameReducer(state, action) {
 
         case 'SYNC_ROOM':
             // Sync room state from Supabase real-time update
-            // CRITICAL: Preserve myParticipantId - it should NEVER be reset by room sync
             const roomData = action.payload;
-            const syncedPhase = roomData.phase ?? state.phase;
-            const syncedGameData = roomData.game_data || {};
-            const syncedPendingCatchUp = syncedGameData.pendingCatchUp || state.pendingCatchUp;
-
-            // Check if WE are in the pending catch-up list (Late Joiner Logic)
-            let localPhase = syncedPhase;
-            let localDraftOrder = roomData.draft_order ?? state.draftOrder;
-
-            // If we are in pendingCatchUp, force us into DRAFT mode locally
-            if ((syncedPhase === 'LIVE' || syncedPhase === 'PAUSED') &&
-                syncedPendingCatchUp?.participantIds?.includes(state.myParticipantId)) {
-                console.log('🎯 Catch-up Mode Triggered for me!');
-                localPhase = 'DRAFT';
-                // Set order to just me so I can pick
-                localDraftOrder = [state.myParticipantId];
-
-                // INTELLIGENT DRAFT PHASE OVERRIDE:
-                // Check which team we are missing player for
-                if (myP) {
-                    const hasHome = myP.roster.home.length > 0;
-                    const hasAway = myP.roster.away.length > 0;
-
-                    // CRITICAL LOOP FIX: If we already have BOTH players, ignore catch-up trigger
-                    if (hasHome && hasAway) {
-                        console.log('✅ Catch-up ignored - Roster full');
-                        // Do NOT override localPhase/localDraftOrder
-                        localPhase = syncedPhase; // Should be LIVE/PAUSED
-                        localDraftOrder = roomData.draft_order ?? state.draftOrder;
-                        // Note: This effectively breaks the loop locally. 
-                        // Ideally we should also ping Supabase to remove us from pending list if we are stuck there?
-                        // But local exit is enough for UI.
-                    } else {
-                        // We genuinely need to catch up
-                        localPhase = 'DRAFT';
-                        localDraftOrder = [state.myParticipantId];
-
-                        // Set Intelligent Draft Phase
-                        if (!hasHome) {
-                            localDraftPhase = 'HOME';
-                        } else if (!hasAway) {
-                            localDraftPhase = 'AWAY';
-                        }
-
-                        // Force turn index to 0
-                        localTurnIndex = 0;
-                    }
-                }
-            } else {
-                // Not in catch-up list, ensure we don't have residual overrides
-                // localPhase is already syncedPhase
-            }
 
             return {
                 ...state,
-                phase: localPhase, // Use local phase override if catching up
+                phase: roomData.phase ?? state.phase,
                 pot: roomData.pot ?? state.pot,
                 ante: roomData.ante ?? state.ante,
-                draftPhase: localDraftPhase, // Override draft phase for catch-up
-                currentTurnIndex: localTurnIndex, // Override turn index for catch-up
-                draftOrder: localDraftOrder, // Use local order override if catching up
+                draftPhase: roomData.draft_phase ?? state.draftPhase,
+                currentTurnIndex: roomData.current_turn_index ?? state.currentTurnIndex,
+                draftOrder: roomData.draft_order ?? state.draftOrder,
+
                 // game_data expansion
                 teams: roomData.game_data?.teams ?? state.teams,
                 availablePlayers: roomData.game_data?.availablePlayers ?? state.availablePlayers,
                 originalRoster: roomData.game_data?.originalRoster ?? state.originalRoster,
-                lastWinner: roomData.game_data?.lastWinner ?? state.lastWinner, // For winner notifications
+                lastWinner: roomData.game_data?.lastWinner ?? state.lastWinner,
 
-                pendingCatchUp: roomData.game_data?.pendingCatchUp ?? state.pendingCatchUp, // If stored in game_data
                 winnerId: roomData.winner_id ?? state.winnerId,
-                // PRESERVE local identity - never reset these
+                // PRESERVE local identity - never reset these by sync
                 myParticipantId: state.myParticipantId,
                 isAdmin: state.isAdmin
             };
@@ -779,65 +727,48 @@ export function GameProvider({ children }) {
                 [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== player.id)
             };
 
+            // SAFE CATCH-UP LOGIC:
+            // If the game is already LIVE, we are just "filling" a slot. 
+            // We do NOT want to change the global turn index, draft order, or phase.
+            if (state.phase === 'LIVE' || state.phase === 'PAUSED') {
+                console.log('✅ Live Catch-up Pick processed');
+                await updateRoom(state.roomId, {
+                    game_data: {
+                        teams: state.teams,
+                        availablePlayers: newAvailable,
+                        originalRoster: state.originalRoster
+                    }
+                    // Do NOT update turn_index, draft_phase, draft_order, or phase
+                });
+                return;
+            }
+
+            // --- STANDARD DRAFT LOGIC (Only for DRAFT phase) ---
             let nextTurnIndex = state.currentTurnIndex + 1;
             let nextDraftPhase = state.draftPhase;
             let nextDraftOrder = state.draftOrder;
             let nextPhase = state.phase;
 
-            // CATCH-UP LOGIC: Check if this was a catch-up pick
-            const existingPending = state.game_data?.pendingCatchUp || state.pendingCatchUp;
-            let newPendingCatchUp = existingPending;
-
-            if (existingPending?.participantIds?.includes(participantId)) {
-                console.log('🎯 Processing Catch-up Pick');
-                // Check if they are now done (have both Home and Away players)
-                // We optimistically use the NEW roster values we just calculated
-                const hasHome = (teamSide === 'home') ? true : (participant.roster.home.length > 0);
-                const hasAway = (teamSide === 'away') ? true : (participant.roster.away.length > 0);
-
-                if (hasHome && hasAway) {
-                    console.log('✅ Catch-up Complete for:', participant.name);
-                    // Remove from pending list
-                    newPendingCatchUp = {
-                        ...existingPending,
-                        participantIds: existingPending.participantIds.filter(id => id !== participantId)
-                    };
-                    // Don't advance global turn index for catch-up picks
-                    nextTurnIndex = state.currentTurnIndex;
-                } else {
-                    console.log('⏳ Catch-up Incomplete - waiting for other team pick');
-                    // Don't advance global turn index
-                    nextTurnIndex = state.currentTurnIndex;
-                }
-            }
-
             // Simple transition logic mirroring reducer
-            // Note: This duplicates reducer logic. In production, refactor into shared pure function.
             const isRoundComplete = nextTurnIndex >= state.draftOrder.length;
 
             if (isRoundComplete) {
-                // If HOME done, switch to AWAY snake
+                // If HOME done, switch to AWAY
                 if (state.draftPhase === 'HOME') {
-                    // Check if simple initial draft (everyone has 0 away)
+                    // Check if simple initial draft
                     const isInitial = state.participants.every(p => p.roster.away.length === 0);
                     if (isInitial) {
                         nextDraftPhase = 'AWAY';
-                        nextTurnIndex = 0;
-                        nextDraftOrder = [...state.draftOrder].reverse();
-                    } else {
-                        nextPhase = 'LIVE';
-                        nextTurnIndex = 0;
-                    }
-                } else if (state.draftPhase === 'AWAY') {
-                    // If AWAY done, go to REVIEW (if initial)
-                    const isInitial = state.participants.every(p => p.roster.home.length > 0);
-                    if (isInitial) {
-                        nextPhase = 'REVIEW';
+                        nextDraftOrder = [...state.draftOrder].reverse(); // Snake
                         nextTurnIndex = 0;
                     } else {
                         nextPhase = 'LIVE';
                         nextTurnIndex = 0;
                     }
+                } else {
+                    // AWAY done -> LIVE
+                    nextPhase = 'LIVE';
+                    nextTurnIndex = 0;
                 }
             }
 
@@ -845,8 +776,7 @@ export function GameProvider({ children }) {
                 game_data: {
                     teams: state.teams,
                     availablePlayers: newAvailable,
-                    originalRoster: state.originalRoster,
-                    pendingCatchUp: newPendingCatchUp // Sync updated pending catch-up list
+                    originalRoster: state.originalRoster
                 },
                 current_turn_index: nextTurnIndex,
                 draft_phase: nextDraftPhase,
