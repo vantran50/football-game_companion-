@@ -29,7 +29,7 @@ export default function JoinScreen() {
         setError(null);
         setIsJoining(true);
 
-        const { success, error: joinError } = await joinRoom(roomCode.trim(), name.trim(), 50);
+        const { success, error: joinError } = await joinRoom(roomCode.trim(), name.trim(), 0);
 
         setIsJoining(false);
 

@@ -561,7 +561,8 @@ export function GameProvider({ children }) {
 
             // 2. Update Room State
             const totalCollected = state.participants.length * state.ante;
-            const draftOrder = state.participants.map(p => p.id);
+            // Randomize initial draft order
+            const draftOrder = [...state.participants.map(p => p.id)].sort(() => Math.random() - 0.5);
 
             await updateRoom(state.roomId, {
                 phase: 'DRAFT',
