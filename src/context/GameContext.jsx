@@ -226,16 +226,25 @@ export function GameProvider({ children }) {
         if (teamSide === 'home') updatesPart.roster_home = newRoster.home;
         if (teamSide === 'away') updatesPart.roster_away = newRoster.away;
 
-        // We run these in parallel for speed, but error handling is loose (MVP)
-        await updateParticipant(me.id, updatesPart);
+        // We run these in parallel for speed, but catch errors now
+        try {
+            const { error: partError } = await updateParticipant(me.id, updatesPart);
+            if (partError) throw partError;
 
-        const newAvailable = {
-            ...state.availablePlayers,
-            [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== player.id)
-        };
-        const updatesRoom = { available_players: newAvailable, current_turn_index: state.currentTurnIndex + 1 };
+            const newAvailable = {
+                ...state.availablePlayers,
+                [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== player.id)
+            };
+            const updatesRoom = { available_players: newAvailable, current_turn_index: state.currentTurnIndex + 1 };
 
-        await updateRoom(state.roomId, updatesRoom);
+            const { error: roomError } = await updateRoom(state.roomId, updatesRoom);
+            if (roomError) throw roomError;
+        } catch (e) {
+            alert("Draft Failed: " + e.message + "\n(Hint: Run the fix_permissions.sql script in Supabase)");
+            console.error(e);
+            // We do NOT revert optimistic update here because subsequent syncs will fix it,
+            // or the user will refresh. The Alert is the key UX.
+        }
     };
 
     const startGame = async () => {
