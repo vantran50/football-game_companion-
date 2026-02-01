@@ -26,7 +26,7 @@ if (!isLive) {
 /**
  * Create a new room with a unique code
  */
-export async function createRoom(code, gameData = null) {
+export async function createRoom(code, gameData = null, ante = 2) {
     if (!supabase) return { data: null, error: 'Supabase not configured' };
 
     const { data, error } = await supabase
@@ -35,7 +35,7 @@ export async function createRoom(code, gameData = null) {
             code: code,
             phase: 'SETUP',
             pot: 0,
-            ante: 5,
+            ante: ante, // Use passed ante instead of hardcoded value
             draft_phase: 'HOME',
             current_turn_index: 0,
             draft_order: [],

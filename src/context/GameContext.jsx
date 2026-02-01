@@ -500,7 +500,7 @@ export function GameProvider({ children }) {
                 availablePlayers: state.availablePlayers,
                 originalRoster: state.originalRoster
             };
-            const { data, error } = await createRoomDb(code, gameData);
+            const { data, error } = await createRoomDb(code, gameData, state.ante);
             if (data) {
                 roomIdRef.current = data.id;
                 dispatch({ type: 'SET_ROOM_ID', payload: data.id });

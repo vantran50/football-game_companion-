@@ -59,7 +59,8 @@ export default function LiveDashboard() {
                         >
                             <div className="absolute inset-0 bg-blue-500/10 group-hover:bg-blue-500/20 transition" />
                             <Flame className="w-10 h-10 text-blue-400 mb-2" />
-                            <span className="text-2xl font-bold text-blue-100">TOUCHDOWN HOME</span>
+                            <span className="text-2xl font-bold text-blue-100">TOUCHDOWN</span>
+                            <span className="text-sm text-blue-300">{state.teams?.home?.name || 'Home'}</span>
                         </button>
 
                         <button
@@ -68,7 +69,8 @@ export default function LiveDashboard() {
                         >
                             <div className="absolute inset-0 bg-amber-500/10 group-hover:bg-amber-500/20 transition" />
                             <Flame className="w-10 h-10 text-amber-400 mb-2" />
-                            <span className="text-2xl font-bold text-amber-100">TOUCHDOWN AWAY</span>
+                            <span className="text-2xl font-bold text-amber-100">TOUCHDOWN</span>
+                            <span className="text-sm text-amber-300">{state.teams?.away?.name || 'Away'}</span>
                         </button>
                     </div>
                 )}
@@ -101,7 +103,7 @@ export default function LiveDashboard() {
 
                         <div className="p-3 space-y-2">
                             {/* Home Slots */}
-                            <div className="text-xs text-slate-500 uppercase font-bold">Lions (Home)</div>
+                            <div className="text-xs text-slate-500 uppercase font-bold">{state.teams?.home?.name || 'Home'} (Home)</div>
                             {p.roster.home.length === 0 ? (
                                 <div className="text-sm text-slate-600 italic">Empty</div>
                             ) : (
@@ -113,7 +115,7 @@ export default function LiveDashboard() {
                             )}
 
                             {/* Away Slots */}
-                            <div className="text-xs text-slate-500 uppercase font-bold mt-2">Packers (Away)</div>
+                            <div className="text-xs text-slate-500 uppercase font-bold mt-2">{state.teams?.away?.name || 'Away'} (Away)</div>
                             {p.roster.away.length === 0 ? (
                                 <div className="text-sm text-slate-600 italic">Empty</div>
                             ) : (
