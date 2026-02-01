@@ -214,10 +214,17 @@ export function GameProvider({ children }) {
     };
 
     const makePick = async (player, teamSide) => {
-        const me = state.participants.find(p => p.id === state.myId);
-        if (!me) return;
+        // 1. Validation (Prevent Stale Picks)
+        const isAvailable = state.availablePlayers[teamSide]?.some(p => p.id === player.id);
+        if (!isAvailable) {
+            alert("Player is no longer available.");
+            return false;
+        }
 
-        // 0. OPTIMISTIC UPDATE (Instant Feedback)
+        const me = state.participants.find(p => p.id === state.myId);
+        if (!me) return false;
+
+        // 0. OPTIMISTIC UPDATE
         dispatch({ type: 'OPTIMISTIC_PICK', payload: { playerId: player.id, teamSide, myId: state.myId } });
 
         // 1. DB Updates
@@ -226,17 +233,14 @@ export function GameProvider({ children }) {
         if (teamSide === 'home') updatesPart.roster_home = newRoster.home;
         if (teamSide === 'away') updatesPart.roster_away = newRoster.away;
 
-        // We run these in parallel for speed, but catch errors now
         try {
             const { error: partError } = await updateParticipant(me.id, updatesPart);
             if (partError) throw partError;
 
-            // CRITICAL FIX: Fetch latest room data to avoid overwriting other people's picks (Race Condition)
-            const { data: latestRoom } = await getRoomByCode(state.roomCode); // Using code is safer or ID
-            // Actually getRoomByCode returns single. Or use getRoomById if available?
-            // We only have getRoomByCode exported. Let's use it.
+            // Fetch latest room data (Race Protection)
+            const { data: latestRoom } = await getRoomByCode(state.roomCode);
 
-            let sourceAvailable = state.availablePlayers; // Default to local if fetch fails
+            let sourceAvailable = state.availablePlayers;
             let currentTurn = state.currentTurnIndex;
 
             if (latestRoom) {
@@ -253,11 +257,12 @@ export function GameProvider({ children }) {
 
             const { error: roomError } = await updateRoom(state.roomId, updatesRoom);
             if (roomError) throw roomError;
+
+            return true; // Success
         } catch (e) {
             alert("Draft Failed: " + e.message + "\n(Hint: Run the fix_permissions.sql script in Supabase)");
             console.error(e);
-            // We do NOT revert optimistic update here because subsequent syncs will fix it,
-            // or the user will refresh. The Alert is the key UX.
+            return false;
         }
     };
 

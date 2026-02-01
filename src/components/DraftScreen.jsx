@@ -4,6 +4,7 @@ import { useState } from 'react';
 export default function DraftScreen({ isCatchUp = false }) {
     const { state, makePick, startGame } = useGame();
     const [tab, setTab] = useState('home'); // home | away
+    const [pickingId, setPickingId] = useState(null); // Lock UI during pick
 
     // Determine my draft needs
     const me = state.participants.find(p => p.id === state.myId);
@@ -13,9 +14,12 @@ export default function DraftScreen({ isCatchUp = false }) {
     // Filter available players
     const players = state.availablePlayers[tab] || [];
 
-    const handlePick = (player) => {
+    const handlePick = async (player) => {
+        if (pickingId) return; // Prevent double click
         if (confirm(`Draft ${player.name}?`)) {
-            makePick(player, tab);
+            setPickingId(player.id);
+            await makePick(player, tab);
+            setPickingId(null);
         }
     };
 
@@ -29,13 +33,15 @@ export default function DraftScreen({ isCatchUp = false }) {
             <div className="flex bg-slate-800 rounded-lg p-1 mb-4">
                 <button
                     onClick={() => setTab('home')}
-                    className={`flex-1 py-3 rounded-md font-bold transition ${tab === 'home' ? 'bg-blue-600 shadow' : 'text-slate-400'}`}
+                    disabled={!!pickingId}
+                    className={`flex-1 py-3 rounded-md font-bold transition ${tab === 'home' ? 'bg-blue-600 shadow' : 'text-slate-400'} disabled:opacity-50`}
                 >
                     HOME {hasHome && '✓'}
                 </button>
                 <button
                     onClick={() => setTab('away')}
-                    className={`flex-1 py-3 rounded-md font-bold transition ${tab === 'away' ? 'bg-green-600 shadow' : 'text-slate-400'}`}
+                    disabled={!!pickingId}
+                    className={`flex-1 py-3 rounded-md font-bold transition ${tab === 'away' ? 'bg-green-600 shadow' : 'text-slate-400'} disabled:opacity-50`}
                 >
                     AWAY {hasAway && '✓'}
                 </button>
@@ -49,14 +55,17 @@ export default function DraftScreen({ isCatchUp = false }) {
                     <button
                         key={p.id}
                         onClick={() => handlePick(p)}
-                        className="w-full flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-blue-500 hover:bg-slate-700 transition group"
+                        disabled={!!pickingId}
+                        className={`w-full flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-blue-500 hover:bg-slate-700 transition group disabled:opacity-50 disabled:cursor-not-allowed`}
                     >
                         <div className="text-left">
-                            <div className="font-bold text-lg group-hover:text-blue-400">{p.name}</div>
+                            <div className="font-bold text-lg group-hover:text-blue-400">
+                                {pickingId === p.id ? 'Drafting...' : p.name}
+                            </div>
                             <div className="text-xs text-slate-400">{p.pos} #{p.num}</div>
                         </div>
                         <div className="bg-slate-900 px-3 py-1 rounded text-xs font-bold text-slate-300">
-                            DRAFT
+                            {pickingId === p.id ? '...' : 'DRAFT'}
                         </div>
                     </button>
                 ))}
