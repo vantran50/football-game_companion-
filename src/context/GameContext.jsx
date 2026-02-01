@@ -424,39 +424,38 @@ function gameReducer(state, action) {
 
                 // INTELLIGENT DRAFT PHASE OVERRIDE:
                 // Check which team we are missing player for
-                const myP = state.participants.find(p => p.id === state.myParticipantId);
-                // Note: state.participants might be slightly stale compared to roomData, but syncing roster is handled separately.
-                // Better to trust our local roster state or what's in roomData if possible?
-                // Actually SyncParticipants handles the roster.
                 if (myP) {
                     const hasHome = myP.roster.home.length > 0;
-                    if (!hasHome) {
-                        // Force HOME if we don't have one
-                        // But need to be careful: syncedDraftPhase might be AWAY.
-                        // We override it locally.
-                        // We need to return a modified draftPhase in the state update.
+                    const hasAway = myP.roster.away.length > 0;
+
+                    // CRITICAL LOOP FIX: If we already have BOTH players, ignore catch-up trigger
+                    if (hasHome && hasAway) {
+                        console.log('✅ Catch-up ignored - Roster full');
+                        // Do NOT override localPhase/localDraftOrder
+                        localPhase = syncedPhase; // Should be LIVE/PAUSED
+                        localDraftOrder = roomData.draft_order ?? state.draftOrder;
+                        // Note: This effectively breaks the loop locally. 
+                        // Ideally we should also ping Supabase to remove us from pending list if we are stuck there?
+                        // But local exit is enough for UI.
+                    } else {
+                        // We genuinely need to catch up
+                        localPhase = 'DRAFT';
+                        localDraftOrder = [state.myParticipantId];
+
+                        // Set Intelligent Draft Phase
+                        if (!hasHome) {
+                            localDraftPhase = 'HOME';
+                        } else if (!hasAway) {
+                            localDraftPhase = 'AWAY';
+                        }
+
+                        // Force turn index to 0
+                        localTurnIndex = 0;
                     }
                 }
-            }
-
-            // Determine local Draft Phase for catch-up
-            let localDraftPhase = roomData.draft_phase ?? state.draftPhase;
-            if (localPhase === 'DRAFT' && syncedPendingCatchUp?.participantIds?.includes(state.myParticipantId)) {
-                // We are in catch-up. Force phase based on needs.
-                const myP = state.participants.find(p => p.id === state.myParticipantId);
-                if (myP) {
-                    if (myP.roster.home.length === 0) {
-                        localDraftPhase = 'HOME';
-                    } else if (myP.roster.away.length === 0) {
-                        localDraftPhase = 'AWAY';
-                    }
-                }
-            }
-
-            // Force turn index to 0 if catching up (since order is just us)
-            let localTurnIndex = roomData.current_turn_index ?? state.currentTurnIndex;
-            if (localPhase === 'DRAFT' && syncedPendingCatchUp?.participantIds?.includes(state.myParticipantId)) {
-                localTurnIndex = 0;
+            } else {
+                // Not in catch-up list, ensure we don't have residual overrides
+                // localPhase is already syncedPhase
             }
 
             return {
