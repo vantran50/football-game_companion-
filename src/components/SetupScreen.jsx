@@ -462,6 +462,10 @@ export default function SetupScreen() {
 
     // NON-ADMIN VIEW: Waiting Screen
     if (!state.isAdmin) {
+        // Find this participant's balance
+        const myParticipant = state.participants.find(p => p.id === state.myParticipantId);
+        const myBalance = myParticipant?.balance ?? 0;
+
         return (
             <div className="max-w-xl mx-auto space-y-8 pt-20 text-center">
                 <div className="bg-surface p-8 rounded-2xl border border-slate-700 shadow-2xl space-y-6">
@@ -474,7 +478,7 @@ export default function SetupScreen() {
                         </p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-700/50">
+                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-slate-700/50">
                         <div className="bg-slate-900/50 p-4 rounded-xl">
                             <div className="text-xs text-slate-500 uppercase font-bold">Pot</div>
                             <div className="text-2xl font-mono text-emerald-400">${state.pot}</div>
@@ -482,6 +486,10 @@ export default function SetupScreen() {
                         <div className="bg-slate-900/50 p-4 rounded-xl">
                             <div className="text-xs text-slate-500 uppercase font-bold">Ante</div>
                             <div className="text-2xl font-mono text-slate-300">${state.ante}</div>
+                        </div>
+                        <div className="bg-slate-900/50 p-4 rounded-xl">
+                            <div className="text-xs text-slate-500 uppercase font-bold">Your Tokens</div>
+                            <div className={cn("text-2xl font-mono", myBalance < 0 ? "text-red-400" : "text-emerald-400")}>${myBalance}</div>
                         </div>
                     </div>
 

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
-import { Trophy, Coins, Flame } from 'lucide-react';
+import { Trophy, Coins, Flame, PartyPopper, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function LiveDashboard() {
@@ -8,6 +8,9 @@ export default function LiveDashboard() {
 
     // Scoring Modal State
     const [scoringTeam, setScoringTeam] = useState(null); // 'home' | 'away'
+
+    // Winner notification state
+    const [notification, setNotification] = useState(null); // { type: 'winner' | 'loser', message: string, potWon: number }
 
     const triggerConfetti = () => {
         confetti({
@@ -27,9 +30,38 @@ export default function LiveDashboard() {
         );
         if (!confirmed) return;
 
+        // Find the winner participant
+        const winner = state.participants.find(p =>
+            p.roster[scoringTeam].some(pl => pl.id === playerId)
+        );
+
+        // Show appropriate notification
+        const myParticipant = state.participants.find(p => p.id === state.myParticipantId);
+        if (winner) {
+            if (myParticipant && winner.id === myParticipant.id) {
+                setNotification({
+                    type: 'winner',
+                    message: '🎉 Congratulations! You won!',
+                    potWon: state.pot,
+                    playerName: player?.name
+                });
+            } else {
+                setNotification({
+                    type: 'loser',
+                    message: `Better luck next time! Winner: ${winner.name}`,
+                    potWon: state.pot,
+                    winnerName: winner.name,
+                    playerName: player?.name
+                });
+            }
+        }
+
         handleScore(playerId, scoringTeam);
         triggerConfetti();
         setScoringTeam(null);
+
+        // Auto-dismiss notification after 8 seconds
+        setTimeout(() => setNotification(null), 8000);
     };
 
     // Get list of drafted players for the active scoring team to show in dropdown
@@ -39,6 +71,33 @@ export default function LiveDashboard() {
 
     return (
         <div className="max-w-5xl mx-auto space-y-8">
+            {/* Winner/Loser Notification Banner */}
+            {notification && (
+                <div className={`relative p-6 rounded-2xl border-2 ${notification.type === 'winner'
+                        ? 'bg-gradient-to-r from-emerald-900/80 to-green-900/80 border-emerald-500'
+                        : 'bg-gradient-to-r from-slate-900 to-slate-800 border-slate-600'
+                    } animate-in slide-in-from-top duration-300`}>
+                    <button
+                        onClick={() => setNotification(null)}
+                        className="absolute top-2 right-2 p-1 text-slate-400 hover:text-white"
+                    >
+                        <X className="w-5 h-5" />
+                    </button>
+                    <div className="text-center">
+                        <div className={`text-3xl font-bold mb-2 ${notification.type === 'winner' ? 'text-emerald-300' : 'text-slate-200'
+                            }`}>
+                            {notification.message}
+                        </div>
+                        <div className="text-slate-400">
+                            {notification.playerName && <span>Touchdown: {notification.playerName}</span>}
+                            {notification.potWon > 0 && (
+                                <span className="ml-2 text-emerald-400 font-bold">Pot: ${notification.potWon}</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* HUD */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Pot */}
