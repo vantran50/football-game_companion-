@@ -421,6 +421,36 @@ function gameReducer(state, action) {
                 localPhase = 'DRAFT';
                 // Set order to just me so I can pick
                 localDraftOrder = [state.myParticipantId];
+
+                // INTELLIGENT DRAFT PHASE OVERRIDE:
+                // Check which team we are missing player for
+                const myP = state.participants.find(p => p.id === state.myParticipantId);
+                // Note: state.participants might be slightly stale compared to roomData, but syncing roster is handled separately.
+                // Better to trust our local roster state or what's in roomData if possible?
+                // Actually SyncParticipants handles the roster.
+                if (myP) {
+                    const hasHome = myP.roster.home.length > 0;
+                    if (!hasHome) {
+                        // Force HOME if we don't have one
+                        // But need to be careful: syncedDraftPhase might be AWAY.
+                        // We override it locally.
+                        // We need to return a modified draftPhase in the state update.
+                    }
+                }
+            }
+
+            // Determine local Draft Phase for catch-up
+            let localDraftPhase = roomData.draft_phase ?? state.draftPhase;
+            if (localPhase === 'DRAFT' && syncedPendingCatchUp?.participantIds?.includes(state.myParticipantId)) {
+                // We are in catch-up. Force phase based on needs.
+                const myP = state.participants.find(p => p.id === state.myParticipantId);
+                if (myP) {
+                    if (myP.roster.home.length === 0) {
+                        localDraftPhase = 'HOME';
+                    } else if (myP.roster.away.length === 0) {
+                        localDraftPhase = 'AWAY';
+                    }
+                }
             }
 
             return {
@@ -428,7 +458,7 @@ function gameReducer(state, action) {
                 phase: localPhase, // Use local phase override if catching up
                 pot: roomData.pot ?? state.pot,
                 ante: roomData.ante ?? state.ante,
-                draftPhase: roomData.draft_phase ?? state.draftPhase,
+                draftPhase: localDraftPhase, // Override draft phase for catch-up
                 currentTurnIndex: roomData.current_turn_index ?? state.currentTurnIndex,
                 draftOrder: localDraftOrder, // Use local order override if catching up
                 // game_data expansion
@@ -537,18 +567,24 @@ export function GameProvider({ children }) {
                 dispatch({ type: 'SET_ROOM_ID', payload: data.id });
                 // Note: Session is saved in addParticipant when admin adds themselves
                 console.log('✅ Room created in Supabase:', data.id);
+
+                // Add Admin as first participant immediately
+                // Pass 'code' explicitly as state.roomCode might be stale in this closure
+                await addParticipant(state.adminName || 'Admin', 0, code);
+
             } else if (error) {
                 console.error('❌ Failed to create room in Supabase:', error);
             }
         }
     };
 
-    const addParticipant = async (name, initialBalance) => {
+    const addParticipant = async (name, initialBalance, roomCodeOverride = null) => {
         const localId = generateCode();
         const p = {
             id: localId,
             name,
             balance: initialBalance,
+            winnings: 0,
             roster: { home: [], away: [] }
         };
         dispatch({ type: 'ADD_PARTICIPANT', payload: p });
@@ -567,8 +603,9 @@ export function GameProvider({ children }) {
                 dispatch({ type: 'UPDATE_PARTICIPANT_ID', payload: { oldId: localId, newId: data.id } });
 
                 // Save session now that we have ID
-                if (state.roomCode) {
-                    saveSession(state.roomCode, data.id);
+                const codeToSave = roomCodeOverride || state.roomCode;
+                if (codeToSave) {
+                    saveSession(codeToSave, data.id);
                 }
 
                 console.log('✅ Participant added in Supabase:', data.id);
