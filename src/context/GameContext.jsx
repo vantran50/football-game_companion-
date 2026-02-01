@@ -3,6 +3,7 @@ import {
     createRoomDb, getRoomByCode, addParticipantDb,
     subscribeToRoom, updateRoom, updateParticipant, getParticipantsByRoom
 } from '../lib/supabaseClient';
+import { getRoster } from '../lib/nfl';
 
 const GameContext = createContext();
 
@@ -66,13 +67,21 @@ export function GameProvider({ children }) {
     };
 
     const createRoom = async (adminName, homeTeam, awayTeam) => {
-        const code = generateCode(); // You need to import this or move it here. Assume imported.
+        const code = generateCode();
         // Create Room
         const { data: room, error } = await createRoomDb(code);
         if (error) { console.error(error); return; }
 
-        // Update basic room data
-        await updateRoom(room.id, { teams: { home: homeTeam, away: awayTeam } });
+        // Populate Players
+        const homeRoster = getRoster(homeTeam);
+        const awayRoster = getRoster(awayTeam);
+
+        // Update basic room data + players
+        await updateRoom(room.id, {
+            teams: { home: homeTeam, away: awayTeam },
+            available_players: { home: homeRoster, away: awayRoster },
+            ante: 2 // Default Ante
+        });
 
         // Add Admin Participant
         const { data: p, error: pError } = await addParticipantDb(room.id, adminName, true);
@@ -83,6 +92,9 @@ export function GameProvider({ children }) {
         dispatch({ type: 'SET_IDENTITY', payload: { id: p.id, isAdmin: true } });
         dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: code } });
         roomIdRef.current = room.id;
+
+        // Initial Participant Sync
+        dispatch({ type: 'SYNC_PARTICIPANTS', payload: [p] });
     };
 
     const joinRoom = async (code, name) => {
@@ -98,6 +110,10 @@ export function GameProvider({ children }) {
         dispatch({ type: 'SET_IDENTITY', payload: { id: p.id, isAdmin: false } });
         dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: code } });
         roomIdRef.current = room.id;
+
+        // Initial Fetch
+        const { data: parts } = await getParticipantsByRoom(room.id);
+        if (parts) dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
     };
 
     const rejoin = async () => {
@@ -120,40 +136,101 @@ export function GameProvider({ children }) {
         if (parts) dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
     };
 
+    const startDraft = async () => {
+        if (!state.isAdmin) return;
+        // Deduct Ante from everyone? (Simplified: Just start draft)
+        // Switch to DRAFT phase
+        await updateRoom(state.roomId, { phase: 'DRAFT', current_turn_index: 0 });
+    };
+
     const makePick = async (player, teamSide) => {
         // 1. Get current participant data
         const me = state.participants.find(p => p.id === state.myId);
         if (!me) return;
 
-        // 2. Update Roster
+        // 2. Update Roster (Local Optimistic + DB)
         const newRoster = { ...me.roster, [teamSide]: [...(me.roster[teamSide] || []), player] };
-        await updateParticipant(me.id, {
-            roster_home: newRoster.home,
-            roster_away: newRoster.away
-        }); // Note: Mapping logic handled in SupabaseClient or here? 
-        // SupabaseClient expects separate columns.
-        // updateParticipant({ roster_home: ..., roster_away: ... })
-        // Let's ensure updateParticipant can handle partials.
 
-        // 3. Update Available Players (Remove picked)
+        // Supabase maps column roster_home / roster_away
+        let updatesPart = {};
+        if (teamSide === 'home') updatesPart.roster_home = newRoster.home;
+        if (teamSide === 'away') updatesPart.roster_away = newRoster.away;
+
+        await updateParticipant(me.id, updatesPart);
+
+        // 3. Update Room Available Players
         const newAvailable = {
             ...state.availablePlayers,
             [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== player.id)
         };
 
-        // 4. Global State Logic (ONLY if DRAFT phase)
-        let updates = { available_players: newAvailable }; // columns must match DB snake_case
+        let updatesRoom = { available_players: newAvailable };
 
+        // 4. Global State Logic
         if (state.phase === 'DRAFT') {
-            // Normal Draft Flow
-            updates.current_turn_index = state.currentTurnIndex + 1;
-            // TODO: Add turn logic here or keep it simple?
-            // User asked for "Simple".
-            // Creating a "Re-roll" button for Admin is easier than complex auto-turn logic.
-            // But let's add basic increment.
+            // Basic turn increment (visual only since we are loose with turns)
+            updatesRoom.current_turn_index = state.currentTurnIndex + 1;
+
+            // Check if draft complete?
+            // If everyone has Home + Away? -> Go LIVE
+            // We can do this check loosely.
+            // Or just let Admin click "Start Game" manually?
+            // Auto-start is better.
+            // But syncing that check is hard.
+            // Let's just stay in DRAFT until Admin clicks "Start Game" or manual trigger?
+            // Or, if *I* am the last one...
+            // Let's keep it simple: DRAFT phase stays until Admin clicks "Start Game".
         }
 
-        await updateRoom(state.roomId, updates);
+        // If CATCH-UP (LIVE), we check roster completeness in App.jsx.
+        // We do NOT change phase here.
+
+        await updateRoom(state.roomId, updatesRoom);
+    };
+
+    const startGame = async () => {
+        if (!state.isAdmin) return;
+        await updateRoom(state.roomId, { phase: 'LIVE' });
+    };
+
+    const handleTouchdown = async (teamSide) => {
+        // 1. Find who has players on this team
+        // Mock: just logging for now.
+        // Implementation:
+        // Identify scoring player? Or just Team TD?
+        // User asked for "Touchdown Home/Away".
+        // BUT logic requires *Player* to score.
+        // If Team TD, who wins?
+        // Maybe we just payout to *someone*?
+        // Let's assume we need to pick a player.
+        // For simplicity: pop up a modal in LiveDashboard?
+        // Or simplified rule: Random winner? No.
+
+        // Okay, standard rule: Admin selects Player who scored.
+        // Since we don't have lists, Admin needs to see "Available Scorers" (Drafted Players on that team).
+        // Let's worry about this UI later.
+        // For now, simple "Reset Round" functionality.
+
+        // Reset Logic:
+        // Clear Rosters.
+        // Reset Available Players (Return everyone).
+        // Phase -> DRAFT.
+
+        const originalHome = getRoster(state.teams.home);
+        const originalAway = getRoster(state.teams.away);
+
+        // Clear all rosters
+        const clearPromises = state.participants.map(p =>
+            updateParticipant(p.id, { roster_home: [], roster_away: [] })
+        );
+        await Promise.all(clearPromises);
+
+        // Reset Room
+        await updateRoom(state.roomId, {
+            phase: 'DRAFT',
+            available_players: { home: originalHome, away: originalAway },
+            current_turn_index: 0
+        });
     };
 
     // --- Subscription ---
@@ -187,6 +264,9 @@ export function GameProvider({ children }) {
         createRoom,
         joinRoom,
         makePick,
+        startDraft,
+        startGame,
+        handleTouchdown,
         // ... (other actions like startDraft, recordTouchdown to be added)
     };
 

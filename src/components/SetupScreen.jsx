@@ -1,7 +1,7 @@
 import { useGame } from '../context/GameContext';
 
 export default function SetupScreen() {
-    const { state, updateRoom } = useGame(); // Assumption: updateRoom exposed in context or add it
+    const { state, startDraft } = useGame();
 
     // If I'm not admin, show waiting
     if (!state.isAdmin) {
@@ -33,8 +33,11 @@ export default function SetupScreen() {
             </div>
 
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                <button className="w-full py-4 bg-green-600 font-bold rounded-lg text-lg">
-                    START DRAFT (To be impl)
+                <button
+                    onClick={startDraft}
+                    className="w-full py-4 bg-green-600 hover:bg-green-500 font-bold rounded-lg text-lg shadow-lg shadow-green-900/20"
+                >
+                    START DRAFT
                 </button>
             </div>
         </div>

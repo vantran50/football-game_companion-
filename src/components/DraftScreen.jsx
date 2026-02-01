@@ -2,7 +2,7 @@ import { useGame } from '../context/GameContext';
 import { useState } from 'react';
 
 export default function DraftScreen({ isCatchUp = false }) {
-    const { state, makePick } = useGame();
+    const { state, makePick, startGame } = useGame();
     const [tab, setTab] = useState('home'); // home | away
 
     // Determine my draft needs
@@ -66,6 +66,18 @@ export default function DraftScreen({ isCatchUp = false }) {
             {isCatchUp && (
                 <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-700 p-4 text-center text-xs text-slate-400">
                     Draft 1 player from each team to join the live game.
+                </div>
+            )}
+
+            {/* Admin Start Game (Only in Main Draft) */}
+            {!isCatchUp && state.isAdmin && (
+                <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-700 p-4">
+                    <button
+                        onClick={startGame}
+                        className="w-full py-4 bg-red-600 hover:bg-red-500 font-bold rounded-lg text-white shadow-lg shadow-red-900/20"
+                    >
+                        START GAME
+                    </button>
                 </div>
             )}
         </div>

@@ -1,7 +1,7 @@
 import { useGame } from '../context/GameContext';
 
 export default function LiveDashboard() {
-    const { state } = useGame();
+    const { state, handleTouchdown } = useGame();
 
     return (
         <div className="p-4">
@@ -32,10 +32,16 @@ export default function LiveDashboard() {
                 <div className="mt-8 p-4 bg-slate-800 rounded-xl border border-red-900/50">
                     <h3 className="font-bold text-red-500 mb-4">Commissioner Controls</h3>
                     <div className="grid grid-cols-2 gap-4">
-                        <button className="py-8 bg-blue-900/50 border border-blue-500 rounded-xl font-bold text-xl hover:bg-blue-900">
+                        <button
+                            onClick={() => handleTouchdown('home')}
+                            className="py-8 bg-blue-900/50 border border-blue-500 rounded-xl font-bold text-xl hover:bg-blue-900 transition"
+                        >
                             TOUCHDOWN HOME
                         </button>
-                        <button className="py-8 bg-green-900/50 border border-green-500 rounded-xl font-bold text-xl hover:bg-green-900">
+                        <button
+                            onClick={() => handleTouchdown('away')}
+                            className="py-8 bg-green-900/50 border border-green-500 rounded-xl font-bold text-xl hover:bg-green-900 transition"
+                        >
                             TOUCHDOWN AWAY
                         </button>
                     </div>
