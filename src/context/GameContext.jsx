@@ -669,8 +669,13 @@ export function GameProvider({ children }) {
         }
     };
 
-    const updatePlayerBalance = (id, balance) => {
+    const updatePlayerBalance = async (id, balance) => {
         dispatch({ type: 'UPDATE_PLAYER_BALANCE', payload: { id, balance } });
+
+        // Sync balance to Supabase so all players see the update
+        if (isLive && state.roomId) {
+            await updateParticipant(id, { balance });
+        }
     };
 
     const updateParticipantName = async (id, name) => {
@@ -815,8 +820,13 @@ export function GameProvider({ children }) {
         }
     };
 
-    const startGame = () => {
+    const startGame = async () => {
         dispatch({ type: 'START_LIVE_GAME' });
+
+        // Sync phase to Supabase so all players see LIVE
+        if (isLive && state.roomId) {
+            await updateRoom(state.roomId, { phase: 'LIVE' });
+        }
     }
 
     const removePlayerFromPool = (player, teamSide) => {
