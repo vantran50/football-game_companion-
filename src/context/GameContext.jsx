@@ -386,6 +386,7 @@ function gameReducer(state, action) {
 
         case 'SYNC_ROOM':
             // Sync room state from Supabase real-time update
+            // CRITICAL: Preserve myParticipantId - it should NEVER be reset by room sync
             const roomData = action.payload;
             return {
                 ...state,
@@ -401,7 +402,10 @@ function gameReducer(state, action) {
                 originalRoster: roomData.game_data?.originalRoster ?? state.originalRoster,
 
                 pendingCatchUp: roomData.game_data?.pendingCatchUp ?? state.pendingCatchUp, // If stored in game_data
-                winnerId: roomData.winner_id ?? state.winnerId
+                winnerId: roomData.winner_id ?? state.winnerId,
+                // PRESERVE local identity - never reset these
+                myParticipantId: state.myParticipantId,
+                isAdmin: state.isAdmin
             };
 
         case 'SYNC_PARTICIPANT_ADD':
