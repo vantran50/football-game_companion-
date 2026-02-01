@@ -16,6 +16,7 @@ export default function SetupScreen() {
         startNextRound,
         updateAnte,
         updatePlayerBalance,
+        updateParticipantName,
         startGame,
         createRoom,
         removePlayerFromPool,
@@ -32,9 +33,11 @@ export default function SetupScreen() {
     }, [state.phase, state.roomCode, state.gameId]);
 
     const [newPlayer, setNewPlayer] = useState('');
-    const [buyIn, setBuyIn] = useState(50);
+    const [buyIn, setBuyIn] = useState(0);
     const [editingId, setEditingId] = useState(null);
     const [editBalance, setEditBalance] = useState(0);
+    const [editingNameId, setEditingNameId] = useState(null);
+    const [editName, setEditName] = useState('');
 
     // Manual Pool Add State
     const [manualPlayerName, setManualPlayerName] = useState('');
@@ -95,6 +98,18 @@ export default function SetupScreen() {
     const handleEditSave = (id) => {
         updatePlayerBalance(id, parseInt(editBalance));
         setEditingId(null);
+    };
+
+    const handleNameEditStart = (p) => {
+        setEditingNameId(p.id);
+        setEditName(p.name);
+    };
+
+    const handleNameEditSave = (id) => {
+        if (editName.trim()) {
+            updateParticipantName(id, editName.trim());
+        }
+        setEditingNameId(null);
     };
 
     const handleConfirmGame = async () => {
@@ -581,7 +596,23 @@ export default function SetupScreen() {
                             )}
                             {state.participants.map(p => (
                                 <div key={p.id} className="flex justify-between items-center bg-slate-900 p-3 rounded group relative">
-                                    <span className="font-medium">{p.name}</span>
+                                    {/* Editable Name */}
+                                    {editingNameId === p.id ? (
+                                        <input
+                                            type="text"
+                                            value={editName}
+                                            onChange={e => setEditName(e.target.value)}
+                                            className="flex-1 max-w-[120px] p-1 text-sm bg-black border border-slate-600 rounded"
+                                            autoFocus
+                                            onBlur={() => handleNameEditSave(p.id)}
+                                            onKeyDown={e => e.key === 'Enter' && handleNameEditSave(p.id)}
+                                        />
+                                    ) : (
+                                        <div className="flex items-center gap-2 group/name cursor-pointer" onClick={() => handleNameEditStart(p)}>
+                                            <span className="font-medium">{p.name}</span>
+                                            <Pencil className="w-3 h-3 text-slate-600 opacity-0 group-hover/name:opacity-100" />
+                                        </div>
+                                    )}
                                     <div className="flex items-center gap-4">
                                         {editingId === p.id ? (
                                             <div className="flex items-center gap-2">

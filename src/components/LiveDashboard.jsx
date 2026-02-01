@@ -18,6 +18,15 @@ export default function LiveDashboard() {
     };
 
     const onConfirmScore = (playerId) => {
+        const player = draftedPlayers.find(p => p.id === playerId);
+        const teamName = scoringTeam === 'home' ? state.teams?.home?.name : state.teams?.away?.name;
+
+        const confirmed = window.confirm(
+            `Award touchdown to ${player?.name || 'Unknown'} (${player?.ownerName || 'Unknown Owner'})?\n\n` +
+            `This will give the pot ($${state.pot}) to ${player?.ownerName}.`
+        );
+        if (!confirmed) return;
+
         handleScore(playerId, scoringTeam);
         triggerConfetti();
         setScoringTeam(null);

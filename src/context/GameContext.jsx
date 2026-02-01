@@ -30,7 +30,7 @@ const initialState = {
     // Participants & Ledger
     participants: [], // { id, name, balance, winnings, roster: { home: [], away: [] } }
     pot: 0,
-    ante: 5,
+    ante: 2,
 
     // Draft State
     draftOrder: [], // Array of Participant IDs
@@ -326,6 +326,15 @@ function gameReducer(state, action) {
                 ...state,
                 participants: state.participants.map(p =>
                     p.id === action.payload.id ? { ...p, balance: action.payload.balance } : p
+                )
+            };
+
+        case 'UPDATE_PARTICIPANT_NAME':
+            // payload: { id, name }
+            return {
+                ...state,
+                participants: state.participants.map(p =>
+                    p.id === action.payload.id ? { ...p, name: action.payload.name } : p
                 )
             };
 
@@ -653,6 +662,13 @@ export function GameProvider({ children }) {
 
     const updatePlayerBalance = (id, balance) => {
         dispatch({ type: 'UPDATE_PLAYER_BALANCE', payload: { id, balance } });
+    };
+
+    const updateParticipantName = async (id, name) => {
+        dispatch({ type: 'UPDATE_PARTICIPANT_NAME', payload: { id, name } });
+        if (isLive && state.roomId) {
+            await updateParticipant(id, { name });
+        }
     };
 
     const removePlayerFromRoster = (participantId, player, teamSide) => {
@@ -1036,6 +1052,7 @@ export function GameProvider({ children }) {
             startNextRound,
             updateAnte,
             updatePlayerBalance,
+            updateParticipantName,
             startGame,
             removePlayerFromRoster,
             addManualPlayerToRoster,

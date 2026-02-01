@@ -39,6 +39,10 @@ export default function DraftScreen() {
     const handleSelect = (player) => {
         if (!currentDrafter) return;
         if (!isMyTurn) return; // Prevent picking out of turn
+
+        const confirmed = window.confirm(`Draft ${player.name} (${player.pos}) for ${currentDrafter.name}?`);
+        if (!confirmed) return;
+
         makePick(currentDrafter.id, player, activeTeamSide);
     };
 
