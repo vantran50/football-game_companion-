@@ -6,5 +6,11 @@ export function cn(...inputs) {
 }
 
 export function generateCode() {
-    return Math.random().toString(36).substring(2, 6).toUpperCase();
+    // Generate 4 letter code (A-Z)
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 4; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
 }

@@ -1,165 +1,73 @@
-import { useState, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
-import { Clock } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { useState } from 'react';
 
-export default function DraftScreen() {
+export default function DraftScreen({ isCatchUp = false }) {
     const { state, makePick } = useGame();
+    const [tab, setTab] = useState('home'); // home | away
 
-    // Timer Mock (Local state for visual, ideally synced)
-    const [seconds, setSeconds] = useState(120);
+    // Determine my draft needs
+    const me = state.participants.find(p => p.id === state.myId);
+    const hasHome = me?.roster.home?.length > 0;
+    const hasAway = me?.roster.away?.length > 0;
 
-    // Position Filter State
-    const [filterPos, setFilterPos] = useState('ALL');
-    const positions = ['ALL', 'QB', 'RB', 'WR', 'TE', 'DST'];
+    // Filter available players
+    const players = state.availablePlayers[tab] || [];
 
-    useEffect(() => {
-        setSeconds(120);
-        const interval = setInterval(() => {
-            setSeconds(s => Math.max(0, s - 1));
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [state.currentTurnIndex]); // Reset on turn change
-
-    const currentDrafter = state.participants.find(p => p.id === state.draftOrder[state.currentTurnIndex]);
-
-    // ROBUST CATCH-UP LOGIC:
-    // If I'm drafting but global phase is NOT 'DRAFT' (i.e., catch-up),
-    // OR if I'm in the pending catch-up list,
-    // determine active side based on MY roster needs, ignoring global state.draftPhase.
-    let computedDraftPhase = state.draftPhase;
-
-    // Check if this is a catch-up scenario
-    const isCatchUp = (state.phase === 'LIVE' || state.phase === 'PAUSED') ||
-        state.pendingCatchUp?.participantIds?.includes(currentDrafter?.id);
-
-    if (isCatchUp && currentDrafter) {
-        if (currentDrafter.roster.home.length === 0) {
-            computedDraftPhase = 'HOME';
-        } else if (currentDrafter.roster.away.length === 0) {
-            computedDraftPhase = 'AWAY';
+    const handlePick = (player) => {
+        if (confirm(`Draft ${player.name}?`)) {
+            makePick(player, tab);
         }
-    }
-
-    const activeTeamSide = computedDraftPhase === 'HOME' ? 'home' : 'away';
-    const activeTeam = computedDraftPhase === 'HOME' ? state.teams.home : state.teams.away;
-
-    // CRITICAL: Only show players from the ACTIVE team's pool
-    // Players are removed from availablePlayers when drafted (in reducer)
-    const activePool = state.availablePlayers[activeTeamSide] || [];
-
-    // Filter by position
-    const displayPool = activePool.filter(p =>
-        filterPos === 'ALL' ? true : p.pos === filterPos
-    );
-
-    const isMyTurn = currentDrafter && (currentDrafter.id === state.myParticipantId || state.isAdmin);
-
-    const handleSelect = (player) => {
-        if (!currentDrafter) return;
-        if (!isMyTurn) return; // Prevent picking out of turn
-
-        const confirmed = window.confirm(`Draft ${player.name} (${player.pos}) for ${currentDrafter.name}?`);
-        if (!confirmed) return;
-
-        makePick(currentDrafter.id, player, activeTeamSide);
     };
 
     return (
-        <div className="max-w-2xl mx-auto space-y-6">
-            {/* Draft Status Header */}
-            <div className="bg-surface p-6 rounded-xl border border-slate-700 text-center space-y-4">
-                <div className="flex justify-center items-center gap-2 text-slate-400 uppercase tracking-widest text-xs font-bold">
-                    Drafting Round: <span className={cn(
-                        "px-2 py-0.5 rounded ml-1",
-                        state.draftPhase === 'HOME' ? "bg-sky-900/50 text-sky-400" : "bg-emerald-900/50 text-emerald-400"
-                    )}>{state.draftPhase} ({activeTeam?.name})</span>
-                </div>
+        <div className="p-4 flex flex-col h-full">
+            <h2 className="text-xl font-bold mb-4">
+                {isCatchUp ? 'Late Draft' : 'Draft Board'}
+            </h2>
 
-                <div className="space-y-1">
-                    <h2 className="text-4xl font-bold text-white">
-                        {currentDrafter ? currentDrafter.name : 'Completed'}
-                    </h2>
-                    <p className={cn("text-lg font-bold", isMyTurn ? "text-emerald-400 animate-pulse" : "text-slate-400")}>
-                        {isMyTurn ? "IT'S YOUR TURN!" : "is on the clock"}
-                    </p>
-                </div>
-
-                <div className="flex justify-center items-center gap-2 text-2xl font-mono text-accent">
-                    <Clock className="w-6 h-6" />
-                    {Math.floor(seconds / 60)}:{(seconds % 60).toString().padStart(2, '0')}
-                </div>
+            {/* Tabs */}
+            <div className="flex bg-slate-800 rounded-lg p-1 mb-4">
+                <button
+                    onClick={() => setTab('home')}
+                    className={`flex-1 py-3 rounded-md font-bold transition ${tab === 'home' ? 'bg-blue-600 shadow' : 'text-slate-400'}`}
+                >
+                    HOME {hasHome && '✓'}
+                </button>
+                <button
+                    onClick={() => setTab('away')}
+                    className={`flex-1 py-3 rounded-md font-bold transition ${tab === 'away' ? 'bg-green-600 shadow' : 'text-slate-400'}`}
+                >
+                    AWAY {hasAway && '✓'}
+                </button>
             </div>
 
-            {/* Draft Board */}
-            <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                    <h3 className="text-lg font-bold text-slate-300">
-                        Available Players: <span className={cn(
-                            "font-bold",
-                            state.draftPhase === 'HOME' ? "text-sky-400" : "text-emerald-400"
-                        )}>{activeTeam?.name}</span>
-                        <span className="text-slate-500 ml-2">({activePool.length} remaining)</span>
-                    </h3>
+            {/* List */}
+            <div className="flex-1 overflow-y-auto space-y-2 pb-20">
+                {players.length === 0 && <div className="text-center text-slate-500 py-10">No players available</div>}
 
-                    {/* Position Filter */}
-                    <div className="flex gap-1 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-                        {positions.map(pos => (
-                            <button
-                                key={pos}
-                                onClick={() => setFilterPos(pos)}
-                                className={cn(
-                                    "px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap",
-                                    filterPos === pos
-                                        ? "bg-primary text-white"
-                                        : "bg-slate-800 text-slate-400 hover:bg-slate-700"
-                                )}
-                            >
-                                {pos}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Player List - SINGLE TEAM ONLY */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 h-[400px] overflow-y-auto pr-1 custom-scrollbar">
-                    {displayPool.length === 0 && (
-                        <div className="col-span-full text-center py-10 text-slate-500 italic">
-                            {filterPos === 'ALL'
-                                ? 'No players remaining in this pool.'
-                                : `No ${filterPos} players available.`}
+                {players.map(p => (
+                    <button
+                        key={p.id}
+                        onClick={() => handlePick(p)}
+                        className="w-full flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-blue-500 hover:bg-slate-700 transition group"
+                    >
+                        <div className="text-left">
+                            <div className="font-bold text-lg group-hover:text-blue-400">{p.name}</div>
+                            <div className="text-xs text-slate-400">{p.pos} #{p.num}</div>
                         </div>
-                    )}
-                    {displayPool.map(player => (
-                        <button
-                            key={player.id}
-                            onClick={() => handleSelect(player)}
-                            className={cn(
-                                "flex items-center justify-between p-4 border rounded-lg transition group text-left",
-                                state.draftPhase === 'HOME'
-                                    ? "bg-sky-900/20 border-sky-800/50 hover:border-sky-500 hover:bg-sky-900/40"
-                                    : "bg-emerald-900/20 border-emerald-800/50 hover:border-emerald-500 hover:bg-emerald-900/40",
-                                !isMyTurn && "opacity-50 cursor-not-allowed hover:bg-transparent hover:border-slate-800"
-                            )}
-                        >
-                            <div>
-                                <div className="font-bold text-lg">{player.name}</div>
-                                <div className="text-slate-400 text-sm flex gap-2">
-                                    <span className="font-mono text-slate-500">#{player.num}</span>
-                                    <span className="bg-slate-800 px-1 rounded text-xs text-slate-300">{player.pos}</span>
-                                </div>
-                            </div>
-                            <div className={cn(
-                                "opacity-0 group-hover:opacity-100 font-bold",
-                                state.draftPhase === 'HOME' ? "text-sky-400" : "text-emerald-400",
-                                !isMyTurn && "hidden"
-                            )}>
-                                Select
-                            </div>
-                        </button>
-                    ))}
-                </div>
+                        <div className="bg-slate-900 px-3 py-1 rounded text-xs font-bold text-slate-300">
+                            DRAFT
+                        </div>
+                    </button>
+                ))}
             </div>
+
+            {/* Status Footer */}
+            {isCatchUp && (
+                <div className="fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-slate-700 p-4 text-center text-xs text-slate-400">
+                    Draft 1 player from each team to join the live game.
+                </div>
+            )}
         </div>
     );
 }

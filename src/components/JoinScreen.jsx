@@ -1,115 +1,81 @@
 import { useState } from 'react';
 import { useGame } from '../context/GameContext';
-import { User, Shield, Loader2 } from 'lucide-react';
+import { cn } from '../lib/utils'; // Assuming utils exists
 
 export default function JoinScreen() {
-    const { setAdmin, joinRoom } = useGame();
+    const { createRoom, joinRoom } = useGame();
+    const [mode, setMode] = useState('join'); // join | create
     const [name, setName] = useState('');
-    const [roomCode, setRoomCode] = useState('');
-    const [isAdmin, setIsAdmin] = useState(false);
-    const [isJoining, setIsJoining] = useState(false);
-    const [error, setError] = useState(null);
+    const [code, setCode] = useState('');
+    const [homeTeam, setHomeTeam] = useState('DET');
+    const [awayTeam, setAwayTeam] = useState('GB');
 
-    const handleStart = () => {
-        if (isAdmin) {
-            setAdmin(); // Sets isAdmin flag, routes to SetupScreen
-        }
+    const handleCreate = () => {
+        if (!name) return alert('Enter name');
+        createRoom(name, homeTeam, awayTeam);
     };
 
-    const handleJoin = async () => {
-        if (!roomCode.trim()) {
-            setError('Please enter a room code');
-            return;
-        }
-        if (!name.trim()) {
-            setError('Please enter your name');
-            return;
-        }
-
-        setError(null);
-        setIsJoining(true);
-
-        const { success, error: joinError } = await joinRoom(roomCode.trim(), name.trim(), 0);
-
-        setIsJoining(false);
-
-        if (!success) {
-            setError(joinError || 'Failed to join room');
-        }
-        // If success, state updates and routing happens automatically
+    const handleJoin = () => {
+        if (!name || !code) return alert('Enter name and code');
+        joinRoom(code.toUpperCase(), name);
     };
 
     return (
-        <div className="max-w-md mx-auto mt-20 space-y-8">
-            <div className="text-center space-y-2">
-                <h2 className="text-3xl font-bold">Welcome</h2>
-                <p className="text-slate-400">Join a draft room or start a new one.</p>
-            </div>
+        <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-6">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-green-400 to-blue-500 bg-clip-text text-transparent">
+                Football Draft
+            </h1>
 
-            <div className="bg-surface p-6 rounded-xl space-y-6 border border-slate-700">
-                <div className="flex gap-4 p-1 bg-slate-900 rounded-lg">
+            <div className="w-full max-w-sm bg-slate-800 p-6 rounded-xl border border-slate-700">
+                <div className="flex mb-6 bg-slate-900 rounded-lg p-1">
                     <button
-                        className={`flex-1 py-2 rounded-md transition ${!isAdmin ? 'bg-primary text-white' : 'text-slate-400'}`}
-                        onClick={() => { setIsAdmin(false); setError(null); }}
-                    >
-                        I'm a Player
-                    </button>
+                        onClick={() => setMode('join')}
+                        className={cn("flex-1 py-2 rounded-md transition", mode === 'join' ? "bg-blue-600 shadow" : "text-slate-400")}
+                    >Join</button>
                     <button
-                        className={`flex-1 py-2 rounded-md transition ${isAdmin ? 'bg-accent text-white' : 'text-slate-400'}`}
-                        onClick={() => { setIsAdmin(true); setError(null); }}
-                    >
-                        I'm the Admin
-                    </button>
+                        onClick={() => setMode('create')}
+                        className={cn("flex-1 py-2 rounded-md transition", mode === 'create' ? "bg-green-600 shadow" : "text-slate-400")}
+                    >Create</button>
                 </div>
 
-                {isAdmin ? (
-                    <div className="space-y-4">
-                        <div className="p-4 bg-slate-900/50 rounded border border-accent/20 text-accent text-sm">
-                            <Shield className="inline w-4 h-4 mr-2" />
-                            You will act as the Bank and TV Controller.
-                        </div>
-                        <button
-                            onClick={handleStart}
-                            className="w-full py-3 bg-accent hover:bg-amber-600 rounded-lg font-bold text-black"
-                        >
-                            Start Setup
-                        </button>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        <input
-                            placeholder="Room Code (e.g. A3BU)"
-                            value={roomCode}
-                            onChange={e => setRoomCode(e.target.value.toUpperCase())}
-                            maxLength={4}
-                            className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:ring-2 focus:ring-primary outline-none text-center text-2xl tracking-widest font-mono uppercase"
-                        />
-                        <input
-                            placeholder="Your Name"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                            className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                        />
+                <div className="space-y-4">
+                    <input
+                        className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg focus:border-blue-500 outline-none"
+                        placeholder="Your Name"
+                        value={name} onChange={e => setName(e.target.value)}
+                    />
 
-                        {error && (
-                            <p className="text-red-400 text-sm text-center">{error}</p>
-                        )}
-
-                        <button
-                            onClick={handleJoin}
-                            disabled={isJoining}
-                            className="w-full py-3 bg-primary hover:bg-blue-600 disabled:bg-slate-700 rounded-lg font-bold flex items-center justify-center gap-2"
-                        >
-                            {isJoining ? (
-                                <><Loader2 className="w-5 h-5 animate-spin" /> Joining...</>
-                            ) : (
-                                'Join Game'
-                            )}
-                        </button>
-                    </div>
-                )}
+                    {mode === 'join' ? (
+                        <>
+                            <input
+                                className="w-full p-3 bg-slate-900 border border-slate-700 rounded-lg font-mono tracking-widest uppercase"
+                                placeholder="ROOM CODE"
+                                maxLength={4}
+                                value={code} onChange={e => setCode(e.target.value)}
+                            />
+                            <button onClick={handleJoin} className="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-lg font-bold shadow-lg shadow-blue-900/20">
+                                JOIN GAME
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-xs text-slate-400">Home</label>
+                                    <input value={homeTeam} onChange={e => setHomeTeam(e.target.value)} className="w-full p-2 bg-slate-900 rounded border border-slate-700" />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-400">Away</label>
+                                    <input value={awayTeam} onChange={e => setAwayTeam(e.target.value)} className="w-full p-2 bg-slate-900 rounded border border-slate-700" />
+                                </div>
+                            </div>
+                            <button onClick={handleCreate} className="w-full py-4 bg-green-600 hover:bg-green-500 rounded-lg font-bold shadow-lg shadow-green-900/20">
+                                CREATE ROOM
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );
 }
-
