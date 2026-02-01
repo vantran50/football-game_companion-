@@ -20,7 +20,9 @@ const getInitialState = () => {
         availablePlayers: { home: [], away: [] },
         participants: [],
         myId: null,
-        isAdmin: false
+        isAdmin: false,
+        connectionStatus: 'IDLE', // IDLE, REJOINING, CONNECTED, ERROR
+        lastError: null
     };
 
     // Synchronous Restore
@@ -33,7 +35,8 @@ const getInitialState = () => {
                     ...base,
                     myId: session.id,
                     isAdmin: session.isAdmin,
-                    roomCode: lastCode // Restore code immediately
+                    roomCode: lastCode,
+                    connectionStatus: 'REJOINING' // Assume we try to rejoin immediately
                 };
             }
         }
@@ -45,10 +48,17 @@ const getInitialState = () => {
 // --- Reducer (DUMB State Replacer) ---
 function gameReducer(state, action) {
     switch (action.type) {
+        case 'SET_STATUS':
+            return { ...state, connectionStatus: action.payload, lastError: action.error || null };
         case 'SET_IDENTITY':
             return { ...state, myId: action.payload.id, isAdmin: action.payload.isAdmin };
         case 'JOIN_SUCCESS':
-            return { ...state, roomId: action.payload.roomId, roomCode: action.payload.roomCode };
+            return {
+                ...state,
+                roomId: action.payload.roomId,
+                roomCode: action.payload.roomCode,
+                connectionStatus: 'CONNECTED'
+            };
         case 'SYNC_ROOM':
             const r = action.payload;
             return {
@@ -183,27 +193,33 @@ export function GameProvider({ children }) {
         if (!session) return;
 
         console.log('🔄 Rejoining Session:', session);
+        dispatch({ type: 'SET_STATUS', payload: 'REJOINING' });
 
-        const { data: room } = await getRoomByCode(lastCode);
-        if (!room) return;
+        try {
+            const { data: room } = await getRoomByCode(lastCode);
+            if (!room) throw new Error('Room not found or expired.');
 
-        // Verify participant still exists in DB?
-        // For now, trust local storage for speed
-        dispatch({ type: 'SET_IDENTITY', payload: { id: session.id, isAdmin: session.isAdmin } });
-        dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: lastCode } });
-        roomIdRef.current = room.id;
+            // Verify participant still exists in DB?
+            // For now, trust local storage for speed but handle fetch
+            dispatch({ type: 'SET_IDENTITY', payload: { id: session.id, isAdmin: session.isAdmin } });
+            dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: lastCode } });
+            roomIdRef.current = room.id;
 
-        // Initial Fetch
-        const { data: parts } = await getParticipantsByRoom(room.id);
-        if (parts) {
-            console.log('🔄 Rejoin Participants Fetch:', parts.length);
-            dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
-        } else {
-            console.error('⚠️ Rejoin fetched 0 participants or failed.');
+            // Initial Fetch
+            const { data: parts } = await getParticipantsByRoom(room.id);
+            if (parts) {
+                console.log('🔄 Rejoin Participants Fetch:', parts.length);
+                dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
+            } else {
+                console.error('⚠️ Rejoin fetched 0 participants or failed.');
+            }
+
+            // Initial Room Data Sync (CRITICAL FIX)
+            dispatch({ type: 'SYNC_ROOM', payload: room });
+        } catch (e) {
+            console.error('Rejoin Error:', e);
+            dispatch({ type: 'SET_STATUS', payload: 'ERROR', error: e.message });
         }
-
-        // Initial Room Data Sync (CRITICAL FIX)
-        dispatch({ type: 'SYNC_ROOM', payload: room });
     };
 
     const startDraft = async () => {
