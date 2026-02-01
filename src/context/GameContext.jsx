@@ -231,11 +231,25 @@ export function GameProvider({ children }) {
             const { error: partError } = await updateParticipant(me.id, updatesPart);
             if (partError) throw partError;
 
+            // CRITICAL FIX: Fetch latest room data to avoid overwriting other people's picks (Race Condition)
+            const { data: latestRoom } = await getRoomByCode(state.roomCode); // Using code is safer or ID
+            // Actually getRoomByCode returns single. Or use getRoomById if available?
+            // We only have getRoomByCode exported. Let's use it.
+
+            let sourceAvailable = state.availablePlayers; // Default to local if fetch fails
+            let currentTurn = state.currentTurnIndex;
+
+            if (latestRoom) {
+                sourceAvailable = latestRoom.available_players;
+                currentTurn = latestRoom.current_turn_index;
+            }
+
             const newAvailable = {
-                ...state.availablePlayers,
-                [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== player.id)
+                ...sourceAvailable,
+                [teamSide]: (sourceAvailable[teamSide] || []).filter(p => p.id !== player.id)
             };
-            const updatesRoom = { available_players: newAvailable, current_turn_index: state.currentTurnIndex + 1 };
+
+            const updatesRoom = { available_players: newAvailable, current_turn_index: currentTurn + 1 };
 
             const { error: roomError } = await updateRoom(state.roomId, updatesRoom);
             if (roomError) throw roomError;
