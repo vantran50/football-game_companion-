@@ -21,6 +21,23 @@ function GameRouter() {
         return <JoinScreen />;
     }
 
+    // 2.5 Hydration Wait (Prevent "Flash of Setup")
+    // If we have a Code (from Session) but no ID (from Server), we are syncing.
+    if (state.roomCode && !state.roomId) {
+        return (
+            <div className="flex flex-col items-center justify-center h-screen space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                <div className="text-xl">Reconnecting to Game...</div>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="text-sm text-slate-400 hover:text-white underline"
+                >
+                    Stuck? Refresh
+                </button>
+            </div>
+        );
+    }
+
     // 3. Global Phase Routing
     if (state.phase === 'SETUP') return <SetupScreen />;
     if (state.phase === 'DRAFT') return <DraftScreen />;
