@@ -7,24 +7,39 @@ import { getRoster } from '../lib/nfl';
 
 const GameContext = createContext();
 
-// --- Initial State ---
-const initialState = {
-    roomId: null,
-    roomCode: null,
-    phase: 'SETUP', // SETUP, DRAFT, LIVE, PAUSED
-    draftPhase: 'HOME', // HOME, AWAY
-    currentTurnIndex: 0,
-    ante: 0,
-    pot: 0,
+const getInitialState = () => {
+    const base = {
+        roomId: null,
+        roomCode: null,
+        phase: 'SETUP',
+        draftPhase: 'HOME',
+        currentTurnIndex: 0,
+        ante: 0,
+        pot: 0,
+        teams: { home: '', away: '' },
+        availablePlayers: { home: [], away: [] },
+        participants: [],
+        myId: null,
+        isAdmin: false
+    };
 
-    // Data
-    teams: { home: '', away: '' },
-    availablePlayers: { home: [], away: [] },
-    participants: [], // Array of objects
+    // Synchronous Restore
+    try {
+        const lastCode = localStorage.getItem('football_last_room');
+        if (lastCode) {
+            const session = JSON.parse(localStorage.getItem(`football_session_${lastCode}`));
+            if (session) {
+                return {
+                    ...base,
+                    myId: session.id,
+                    isAdmin: session.isAdmin,
+                    roomCode: lastCode // Restore code immediately
+                };
+            }
+        }
+    } catch (e) { console.error('Storage init error', e); }
 
-    // My Identity (Persisted)
-    myId: null,
-    isAdmin: false, // Trust localStorage
+    return base;
 };
 
 // --- Reducer (DUMB State Replacer) ---
@@ -47,19 +62,30 @@ function gameReducer(state, action) {
                 availablePlayers: r.available_players || state.availablePlayers,
             };
         case 'SYNC_PARTICIPANTS':
-            return { ...state, participants: action.payload };
+            return { ...state, participants: action.payload }; // Payload is RAW from DB
         case 'RESET':
-            return initialState;
+            return getInitialState();
         default:
             return state;
     }
 }
 
 export function GameProvider({ children }) {
-    const [state, dispatch] = useReducer(gameReducer, initialState);
-    const roomIdRef = useRef(null); // For immediate access in callbacks
+    const [state, dispatch] = useReducer(gameReducer, undefined, getInitialState);
+    const roomIdRef = useRef(null);
 
     // --- Actions ---
+
+    // Format helper (Running on every render to ensure safety)
+    const formattedParticipants = (state.participants || []).map(p => ({
+        ...p,
+        // SAFE ACCESS: Handle nulls/undefined from DB
+        roster: {
+            home: Array.isArray(p.roster_home) ? p.roster_home : [],
+            away: Array.isArray(p.roster_away) ? p.roster_away : []
+        },
+        isAdmin: !!p.is_admin
+    }));
 
     const saveSession = (code, id, isAdmin) => {
         localStorage.setItem(`football_session_${code}`, JSON.stringify({ id, isAdmin }));
@@ -258,13 +284,6 @@ export function GameProvider({ children }) {
         );
         return () => { if (unsub) unsub(); };
     }, [state.roomId]);
-
-    // Format helper
-    const formattedParticipants = state.participants.map(p => ({
-        ...p,
-        roster: { home: p.roster_home, away: p.roster_away },
-        isAdmin: p.is_admin
-    }));
 
     const value = {
         state: { ...state, participants: formattedParticipants }, // Expose formatted
