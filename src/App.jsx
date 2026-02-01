@@ -14,6 +14,20 @@ function GameRouter() {
     return <JoinScreen />;
   }
 
+  // ROBUST LATE JOINER ROUTE:
+  // If phase is LIVE/PAUSED but I have an incomplete roster, forced DRAFT SCREEN.
+  // This physically prevents the "infinite loop" UI because once roster is full, we unmount.
+  if ((state.phase === 'LIVE' || state.phase === 'PAUSED') && state.myParticipantId) {
+    const me = state.participants.find(p => p.id === state.myParticipantId);
+    if (me) {
+      const hasHome = me.roster.home.length > 0;
+      const hasAway = me.roster.away.length > 0;
+      if (!hasHome || !hasAway) {
+        return <DraftScreen />;
+      }
+    }
+  }
+
   // Phase Router
   switch (state.phase) {
     case 'SETUP':

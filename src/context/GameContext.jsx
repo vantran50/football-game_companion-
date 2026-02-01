@@ -967,7 +967,7 @@ export function GameProvider({ children }) {
         localStorage.setItem('football_draft_session', JSON.stringify({ roomCode: code, participantId: pid }));
     };
 
-    const rejoinGame = async (code, participantId) => {
+    const rejoinGame = async (code, participantId, savedIsAdmin = false) => {
         const { data: room, error } = await getRoomByCode(code);
         if (error || !room) {
             console.error('❌ Rejoin failed: Room not found');
@@ -989,7 +989,6 @@ export function GameProvider({ children }) {
         // RESTORE REFERENCES
         roomIdRef.current = room.id; // CRITICAL: Restore DB ID for subsequent writes
 
-
         // Transform DB participants to State format (roster_home -> roster.home)
         const formattedParticipants = participants.map(p => ({
             id: p.id,
@@ -1002,6 +1001,9 @@ export function GameProvider({ children }) {
                 away: p.roster_away || []
             }
         }));
+
+        // Determine Admin status (DB priority, but fallback to local storage if DB is potentially syncing slow or incorrect)
+        const isAdmin = !!me.is_admin || savedIsAdmin;
 
         dispatch({
             type: 'JOIN_ROOM',
@@ -1021,12 +1023,13 @@ export function GameProvider({ children }) {
                 pendingCatchUp: room.game_data?.pendingCatchUp, // CRITICAL: Restore catch-up state
                 winnerId: room.winner_id,
                 myParticipantId: me.id, // Set participant ID for this user
-                isAdmin: !!me.is_admin, // Preserve admin status from database (Explicit boolean cast)
+                isAdmin: isAdmin, // Use robust Admin check
                 participants: formattedParticipants // Bulk load transformed participants
             }
         });
 
-        // No need to loop dispatch SYNC_PARTICIPANT_ADD anymore
+        // Refresh Session Storage with confirmed Admin status
+        saveSession(code, participantId, isAdmin);
     };
 
     // Auto-Rejoin Effect
@@ -1035,7 +1038,7 @@ export function GameProvider({ children }) {
             const saved = JSON.parse(localStorage.getItem('football_draft_session'));
             if (saved && saved.roomCode && saved.participantId && !state.roomId) {
                 console.log('🔄 Attempting to rejoin session:', saved);
-                await rejoinGame(saved.roomCode, saved.participantId);
+                await rejoinGame(saved.roomCode, saved.participantId, saved.isAdmin);
             }
         };
         checkRejoin();
