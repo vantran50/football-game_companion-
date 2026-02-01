@@ -462,6 +462,9 @@ function gameReducer(state, action) {
                 participants: state.participants.filter(p => p.id !== action.payload.id)
             };
 
+        case 'RESET_STATE':
+            return initialState;
+
         default:
             return state;
     }
@@ -1001,6 +1004,11 @@ export function GameProvider({ children }) {
         dispatch({ type: 'SET_ADMIN' });
     };
 
+    const leaveRoom = () => {
+        localStorage.removeItem('football_draft_session');
+        dispatch({ type: 'RESET_STATE' });
+    };
+
     return (
         <GameContext.Provider value={{
             state,
@@ -1020,7 +1028,8 @@ export function GameProvider({ children }) {
             addManualPlayerToRoster,
             addPlayerToPool,
             claimFreeAgent,
-            joinRoom
+            joinRoom,
+            leaveRoom
         }}>
             {children}
         </GameContext.Provider>
