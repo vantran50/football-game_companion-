@@ -425,7 +425,8 @@ function gameReducer(state, action) {
 
         case 'SYNC_PARTICIPANT_ADD':
             // New participant joined from another device
-            if (state.participants.find(p => p.id === action.payload.id)) {
+            // Check by ID OR by name (to prevent duplicates when local temp ID was replaced)
+            if (state.participants.find(p => p.id === action.payload.id || p.name === action.payload.name)) {
                 return state; // Already exists
             }
             const newP = action.payload;
@@ -435,6 +436,7 @@ function gameReducer(state, action) {
                     id: newP.id,
                     name: newP.name,
                     balance: newP.balance,
+                    winnings: newP.winnings || 0,
                     isAdmin: newP.is_admin,
                     roster: {
                         home: newP.roster_home || [],
@@ -1022,6 +1024,26 @@ export function GameProvider({ children }) {
                 const newOrder = [...currentOrder, newParticipant.id];
                 await updateRoom(room.id, { draft_order: newOrder });
             }
+        } else if (room.phase === 'LIVE' || room.phase === 'PAUSED') {
+            // Late joiner during live game - need to catch up on both teams
+            console.log('⏳ Late Joiner during LIVE/PAUSED: Setting up catch-up draft');
+
+            // Update room with pending catch-up for this late joiner
+            const currentGameData = room.game_data || {};
+            const existingPendingCatchUp = currentGameData.pendingCatchUp || { participantIds: [], teamSides: [] };
+
+            // Add this participant to pending catch-up for both teams (they have no picks yet)
+            const newPendingCatchUp = {
+                participantIds: [...existingPendingCatchUp.participantIds, newParticipant.id],
+                teamSides: ['home', 'away'] // They need to pick from both teams
+            };
+
+            await updateRoom(room.id, {
+                game_data: {
+                    ...currentGameData,
+                    pendingCatchUp: newPendingCatchUp
+                }
+            });
         }
 
         // Save session
