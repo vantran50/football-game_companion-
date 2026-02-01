@@ -462,7 +462,9 @@ function gameReducer(state, action) {
                     p.id === updatedP.id
                         ? {
                             ...p,
-                            balance: updatedP.balance,
+                            name: updatedP.name !== undefined ? updatedP.name : p.name,
+                            balance: updatedP.balance !== undefined ? updatedP.balance : p.balance,
+                            winnings: updatedP.winnings !== undefined ? updatedP.winnings : p.winnings,
                             // Reconstruct roster if provided, otherwise keep existing
                             roster: (updatedP.roster_home || updatedP.roster_away)
                                 ? { home: updatedP.roster_home || [], away: updatedP.roster_away || [] }

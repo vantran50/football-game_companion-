@@ -460,8 +460,9 @@ export default function SetupScreen() {
     // --- UI Phase: Room Setup (Room Created, Add Participants, Start Draft) ---
     // Also handles PAUSED state for intermission and REVIEW for post-draft
 
-    // NON-ADMIN VIEW: Waiting Screen
-    if (!state.isAdmin) {
+    // NON-ADMIN VIEW: Waiting Screen (only during SETUP/PAUSED/REVIEW - App.jsx routes to other screens for other phases)
+    // This check ensures we show the waiting screen only when SetupScreen is the correct view
+    if (!state.isAdmin && (state.phase === 'SETUP' || state.phase === 'PAUSED' || state.phase === 'REVIEW')) {
         // Find this participant's balance
         const myParticipant = state.participants.find(p => p.id === state.myParticipantId);
         const myBalance = myParticipant?.balance ?? 0;
@@ -476,8 +477,8 @@ export default function SetupScreen() {
                 {/* Winner Notification Banner */}
                 {isRecentWin && (
                     <div className={`p-6 rounded-2xl border-2 ${iAmTheWinner
-                            ? 'bg-gradient-to-r from-emerald-900/80 to-green-900/80 border-emerald-500'
-                            : 'bg-gradient-to-r from-slate-900 to-slate-800 border-slate-600'
+                        ? 'bg-gradient-to-r from-emerald-900/80 to-green-900/80 border-emerald-500'
+                        : 'bg-gradient-to-r from-slate-900 to-slate-800 border-slate-600'
                         } animate-in slide-in-from-top duration-300`}>
                         <div className="text-center">
                             <div className={`text-3xl font-bold mb-2 ${iAmTheWinner ? 'text-emerald-300' : 'text-slate-200'
