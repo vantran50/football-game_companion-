@@ -940,7 +940,7 @@ export function GameProvider({ children }) {
      * @param {number} buyIn - Initial balance (tokens)
      * @returns {Promise<{success: boolean, error?: string}>}
      */
-    const joinRoom = async (code, playerName, buyIn = 50) => {
+    const joinRoom = async (code, playerName, buyIn = 0) => {
         console.log('🔍 joinRoom called:', { code, playerName, isLive });
 
         if (!isLive) {

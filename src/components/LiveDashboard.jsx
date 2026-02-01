@@ -54,7 +54,10 @@ export default function LiveDashboard() {
                 {state.isAdmin && (
                     <div className="md:col-span-2 grid grid-cols-2 gap-4">
                         <button
-                            onClick={() => setScoringTeam('home')}
+                            onClick={() => {
+                                const confirmed = window.confirm(`Record a touchdown for ${state.teams?.home?.name || 'Home'}?`);
+                                if (confirmed) setScoringTeam('home');
+                            }}
                             className="group relative overflow-hidden bg-blue-900/40 hover:bg-blue-800 border-2 border-blue-500/30 hover:border-blue-400 rounded-2xl p-6 transition flex flex-col items-center justify-center"
                         >
                             <div className="absolute inset-0 bg-blue-500/10 group-hover:bg-blue-500/20 transition" />
@@ -64,7 +67,10 @@ export default function LiveDashboard() {
                         </button>
 
                         <button
-                            onClick={() => setScoringTeam('away')}
+                            onClick={() => {
+                                const confirmed = window.confirm(`Record a touchdown for ${state.teams?.away?.name || 'Away'}?`);
+                                if (confirmed) setScoringTeam('away');
+                            }}
                             className="group relative overflow-hidden bg-amber-900/40 hover:bg-amber-800 border-2 border-amber-500/30 hover:border-amber-400 rounded-2xl p-6 transition flex flex-col items-center justify-center"
                         >
                             <div className="absolute inset-0 bg-amber-500/10 group-hover:bg-amber-500/20 transition" />
