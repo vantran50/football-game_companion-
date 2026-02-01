@@ -518,9 +518,7 @@ export function GameProvider({ children }) {
             if (data) {
                 roomIdRef.current = data.id;
                 dispatch({ type: 'SET_ROOM_ID', payload: data.id });
-                saveSession(code, 'ADMIN'); // Admin doesn't have a participant ID in 'participants' table yet, wait... 
-                // Actually Admin creates a participant record immediately after in 'addParticipant'.
-                // So we should save after addParticipant.
+                // Note: Session is saved in addParticipant when admin adds themselves
                 console.log('✅ Room created in Supabase:', data.id);
             } else if (error) {
                 console.error('❌ Failed to create room in Supabase:', error);

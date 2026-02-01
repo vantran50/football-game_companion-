@@ -39,13 +39,19 @@ function AppHeader() {
         🏈 Draft Companion
       </h1>
       {state.roomCode && (
-        <button
-          onClick={leaveRoom}
-          className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-red-900/50 border border-slate-700 hover:border-red-500 rounded-lg text-sm text-slate-400 hover:text-red-400 transition"
-        >
-          <LogOut className="w-4 h-4" />
-          Leave Room
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="px-3 py-1 bg-surface-light rounded-lg border border-slate-700 select-all">
+            <span className="text-xs text-slate-400 mr-2">CODE:</span>
+            <span className="font-mono font-bold tracking-wider">{state.roomCode}</span>
+          </div>
+          <button
+            onClick={leaveRoom}
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-red-900/50 border border-slate-700 hover:border-red-500 rounded-lg text-sm text-slate-400 hover:text-red-400 transition"
+          >
+            <LogOut className="w-4 h-4" />
+            <span className="hidden sm:inline">Leave</span>
+          </button>
+        </div>
       )}
     </header>
   );
