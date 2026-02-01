@@ -31,7 +31,7 @@ export default function DraftScreen() {
 
     // Check if this is a catch-up scenario
     const isCatchUp = (state.phase === 'LIVE' || state.phase === 'PAUSED') ||
-        state.game_data?.pendingCatchUp?.participantIds?.includes(currentDrafter?.id);
+        state.pendingCatchUp?.participantIds?.includes(currentDrafter?.id);
 
     if (isCatchUp && currentDrafter) {
         if (currentDrafter.roster.home.length === 0) {

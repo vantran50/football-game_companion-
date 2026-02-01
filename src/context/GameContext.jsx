@@ -984,6 +984,10 @@ export function GameProvider({ children }) {
 
         console.log('✅ Rejoin successful:', me.name);
 
+        // RESTORE REFERENCES
+        roomIdRef.current = room.id; // CRITICAL: Restore DB ID for subsequent writes
+
+
         // Transform DB participants to State format (roster_home -> roster.home)
         const formattedParticipants = participants.map(p => ({
             id: p.id,
