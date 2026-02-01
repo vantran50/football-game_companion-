@@ -71,8 +71,10 @@ function gameReducer(state, action) {
                 teams: action.payload.teams || state.teams,
                 availablePlayers: action.payload.availablePlayers || state.availablePlayers,
                 originalRoster: action.payload.originalRoster || state.originalRoster,
+                lastWinner: action.payload.lastWinner || state.lastWinner,
                 participants: action.payload.participants || [],
-                myParticipantId: action.payload.myParticipantId
+                myParticipantId: action.payload.myParticipantId,
+                isAdmin: false // Explicitly set - players joining are never admin
             };
         case 'SET_GAME_DATA':
             return {
@@ -1030,17 +1032,20 @@ export function GameProvider({ children }) {
                 teams: room.game_data?.teams,
                 availablePlayers: room.game_data?.availablePlayers,
                 originalRoster: room.game_data?.originalRoster,
+                lastWinner: room.game_data?.lastWinner, // Sync last winner for notifications
                 participants: [
                     ...(participants || []).map(p => ({
                         id: p.id,
                         name: p.name,
                         balance: p.balance,
+                        winnings: p.winnings || 0,
                         roster: { home: p.roster_home || [], away: p.roster_away || [] }
                     })),
                     {
                         id: newParticipant.id,
                         name: playerName,
                         balance: buyIn,
+                        winnings: 0,
                         roster: { home: [], away: [] }
                     }
                 ],
