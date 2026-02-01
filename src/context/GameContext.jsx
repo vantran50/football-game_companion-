@@ -140,6 +140,9 @@ export function GameProvider({ children }) {
             console.log('✅ Initial Join Participants Fetch:', parts);
             dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
         }
+
+        // Initial Room Data Sync (CRITICAL FIX)
+        dispatch({ type: 'SYNC_ROOM', payload: room });
     };
 
     const rejoin = async () => {
@@ -167,6 +170,9 @@ export function GameProvider({ children }) {
         } else {
             console.error('⚠️ Rejoin fetched 0 participants or failed.');
         }
+
+        // Initial Room Data Sync (CRITICAL FIX)
+        dispatch({ type: 'SYNC_ROOM', payload: room });
     };
 
     const startDraft = async () => {
