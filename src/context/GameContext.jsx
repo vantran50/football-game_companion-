@@ -227,43 +227,39 @@ export function GameProvider({ children }) {
     };
 
     const handleTouchdown = async (teamSide) => {
-        // 1. Find who has players on this team
-        // Mock: just logging for now.
-        // Implementation:
-        // Identify scoring player? Or just Team TD?
-        // User asked for "Touchdown Home/Away".
-        // BUT logic requires *Player* to score.
-        // If Team TD, who wins?
-        // Maybe we just payout to *someone*?
-        // Let's assume we need to pick a player.
-        // For simplicity: pop up a modal in LiveDashboard?
-        // Or simplified rule: Random winner? No.
-
-        // Okay, standard rule: Admin selects Player who scored.
-        // Since we don't have lists, Admin needs to see "Available Scorers" (Drafted Players on that team).
-        // Let's worry about this UI later.
-        // For now, simple "Reset Round" functionality.
-
-        // Reset Logic:
-        // Clear Rosters.
-        // Reset Available Players (Return everyone).
-        // Phase -> DRAFT.
-
         const originalHome = getRoster(state.teams.home);
         const originalAway = getRoster(state.teams.away);
 
-        // Clear all rosters
         const clearPromises = state.participants.map(p =>
             updateParticipant(p.id, { roster_home: [], roster_away: [] })
         );
         await Promise.all(clearPromises);
 
-        // Reset Room
         await updateRoom(state.roomId, {
             phase: 'DRAFT',
             available_players: { home: originalHome, away: originalAway },
             current_turn_index: 0
         });
+    };
+
+    const adminAssignPlayer = async (targetId, player, teamSide) => {
+        if (!state.isAdmin) return;
+        const target = state.participants.find(p => p.id === targetId);
+        if (!target) return;
+
+        // Update Roster
+        const newRoster = { ...target.roster, [teamSide]: [...(target.roster[teamSide] || []), player] };
+        let updatesPart = {};
+        if (teamSide === 'home') updatesPart.roster_home = newRoster.home;
+        if (teamSide === 'away') updatesPart.roster_away = newRoster.away;
+        await updateParticipant(targetId, updatesPart);
+
+        // Update Room (Remove from pool)
+        const newAvailable = {
+            ...state.availablePlayers,
+            [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== player.id)
+        };
+        await updateRoom(state.roomId, { available_players: newAvailable });
     };
 
     // --- Subscription ---
