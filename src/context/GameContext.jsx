@@ -453,13 +453,19 @@ function gameReducer(state, action) {
                 }
             }
 
+            // Force turn index to 0 if catching up (since order is just us)
+            let localTurnIndex = roomData.current_turn_index ?? state.currentTurnIndex;
+            if (localPhase === 'DRAFT' && syncedPendingCatchUp?.participantIds?.includes(state.myParticipantId)) {
+                localTurnIndex = 0;
+            }
+
             return {
                 ...state,
                 phase: localPhase, // Use local phase override if catching up
                 pot: roomData.pot ?? state.pot,
                 ante: roomData.ante ?? state.ante,
                 draftPhase: localDraftPhase, // Override draft phase for catch-up
-                currentTurnIndex: roomData.current_turn_index ?? state.currentTurnIndex,
+                currentTurnIndex: localTurnIndex, // Override turn index for catch-up
                 draftOrder: localDraftOrder, // Use local order override if catching up
                 // game_data expansion
                 teams: roomData.game_data?.teams ?? state.teams,
@@ -978,6 +984,19 @@ export function GameProvider({ children }) {
 
         console.log('✅ Rejoin successful:', me.name);
 
+        // Transform DB participants to State format (roster_home -> roster.home)
+        const formattedParticipants = participants.map(p => ({
+            id: p.id,
+            name: p.name,
+            balance: p.balance,
+            winnings: p.winnings || 0,
+            isAdmin: p.is_admin,
+            roster: {
+                home: p.roster_home || [],
+                away: p.roster_away || []
+            }
+        }));
+
         dispatch({
             type: 'JOIN_ROOM',
             payload: {
@@ -996,7 +1015,7 @@ export function GameProvider({ children }) {
                 winnerId: room.winner_id,
                 myParticipantId: me.id, // Set participant ID for this user
                 isAdmin: me.is_admin, // Preserve admin status from database
-                participants: participants // Bulk load all participants
+                participants: formattedParticipants // Bulk load transformed participants
             }
         });
 
