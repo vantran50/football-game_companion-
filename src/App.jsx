@@ -5,14 +5,23 @@ import LiveDashboard from './components/LiveDashboard';
 import JoinScreen from './components/JoinScreen'; // Need to create
 
 function GameRouter() {
-    const { state } = useGame();
+    const { state, rejoin } = useGame();
 
     // 1. Not in a room? -> Join/Create
+    // 1. Initial Identity Recovery (Tab-Specific)
+    useEffect(() => {
+        // Nuke legacy storage to prevent conflicts (Fixes "Gaslighting" bugs)
+        try { localStorage.clear(); } catch (e) { }
+
+        rejoin();
+    }, []);
+
+    // 2. Not in a room? -> Join/Create
     if (!state.roomCode) {
         return <JoinScreen />;
     }
 
-    // 2. Global Phase Routing
+    // 3. Global Phase Routing
     if (state.phase === 'SETUP') return <SetupScreen />;
     if (state.phase === 'DRAFT') return <DraftScreen />;
     if (state.phase === 'LIVE') return <LiveDashboard />;
