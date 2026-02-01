@@ -313,65 +313,8 @@ function gameReducer(state, action) {
             return { ...state, phase: 'LIVE' };
 
         case 'START_NEXT_ROUND':
-            // Transitions PAUSED -> DRAFT
-            const totalRoundAnte = state.participants.length * state.ante;
-
-            // LATE JOINER LOGIC (Revised):
-            // 1. Determine scoring team (redraft) vs non-scoring team
-            const redraftSide = state.draftPhase === 'HOME' ? 'home' : 'away';
-            const nonRedraftSide = redraftSide === 'home' ? 'away' : 'home';
-
-            // 2. Find new participants who need catch-up (missing player on non-scoring team)
-            const needsCatchUp = state.participants.filter(p => p.roster[nonRedraftSide].length === 0);
-
-            // 3. Build draft order: losers shuffled + winner last (from TOUCHDOWN_SCORED)
-            // New participants are ALREADY in state.draftOrder since they were added during PAUSED
-
-            // 4. ALWAYS start with scoring team redraft (everyone participates)
-            // Store catch-up info to execute AFTER scoring team draft completes
-            return {
-                ...state,
-                phase: 'DRAFT',
-                participants: state.participants.map(p => ({ ...p, balance: p.balance - state.ante })),
-                pot: (state.pot || 0) + totalRoundAnte,
-
-                // Start with scoring team (everyone drafts)
-                draftPhase: redraftSide.toUpperCase(),
-                currentTurnIndex: 0,
-                // draftOrder already set by TOUCHDOWN_SCORED (winner last, losers shuffled)
-                // BUT we need to include new participants in the shuffle!
-                draftOrder: (() => {
-                    // Get current order (losers shuffled + winner last from TD)
-                    const existingOrder = state.draftOrder;
-                    const winnerId = existingOrder[existingOrder.length - 1];
-
-                    // Find new participants not in existing order
-                    const newParticipantIds = state.participants
-                        .filter(p => !existingOrder.includes(p.id))
-                        .map(p => p.id);
-
-                    if (newParticipantIds.length === 0) {
-                        return existingOrder; // No new players
-                    }
-
-                    // Insert new players into losers pool (shuffled), keep winner last
-                    const losersWithNew = [...existingOrder.slice(0, -1), ...newParticipantIds]
-                        .sort(() => Math.random() - 0.5);
-
-                    return [...losersWithNew, winnerId];
-                })(),
-
-                // Store pending catch-up for AFTER scoring team draft
-                pendingCatchUp: needsCatchUp.length > 0 ? {
-                    // Shuffle new participants for fairness
-                    participantIds: needsCatchUp.map(p => p.id).sort(() => Math.random() - 0.5),
-                    teamSide: nonRedraftSide
-                } : null,
-
-                // Clear old flags
-                nextDraftPhase: null,
-                nextDraftOrder: null
-            };
+            // Logic moved to startNextRound async action
+            return state;
 
         // Admin Edits
         case 'UPDATE_ANTE':
@@ -614,10 +557,69 @@ export function GameProvider({ children }) {
         }
     };
 
-    const startNextRound = () => {
-        // Wiring handling later if ensuring complex logic matched
-        dispatch({ type: 'START_NEXT_ROUND' });
-    }
+    const startNextRound = async () => {
+        if (!isLive || !state.roomId) return;
+
+        // 1. Determine scoring team (redraft) vs non-scoring team
+        const redraftSide = state.draftPhase === 'HOME' ? 'home' : 'away';
+        const nonRedraftSide = redraftSide === 'home' ? 'away' : 'home';
+
+        // 2. Find new participants who need catch-up (missing player on non-scoring team)
+        const needsCatchUp = state.participants.filter(p => p.roster[nonRedraftSide].length === 0);
+
+        // 3. Update Participants (Deduct Ante)
+        const deductionPromises = state.participants.map(p =>
+            updateParticipant(p.id, { balance: p.balance - state.ante })
+        );
+        await Promise.all(deductionPromises);
+
+        // 4. Calculate New Draft Order
+        // Touchdown logic already set draftOrder to [shuffled losers..., winner]
+        // We just need to inject NEW participants into the "losers" pool
+        const existingOrder = state.draftOrder;
+        // Safety check if order is empty
+        if (existingOrder.length === 0) {
+            console.error("Previous draft order is empty, cannot determination Start Next Round order safely.");
+            return;
+        }
+
+        const winnerId = existingOrder[existingOrder.length - 1];
+        const newParticipantIds = state.participants
+            .filter(p => !existingOrder.includes(p.id))
+            .map(p => p.id);
+
+        let finalDraftOrder = existingOrder;
+        if (newParticipantIds.length > 0) {
+            const losersWithNew = [...existingOrder.slice(0, -1), ...newParticipantIds]
+                .sort(() => Math.random() - 0.5); // Shuffle losers + new
+            finalDraftOrder = [...losersWithNew, winnerId];
+        }
+
+        // 5. Calculate Pot
+        const totalRoundAnte = state.participants.length * state.ante;
+        const newPot = (state.pot || 0) + totalRoundAnte;
+
+        // 6. Pending Catch-up
+        const pendingCatchUp = needsCatchUp.length > 0 ? {
+            participantIds: needsCatchUp.map(p => p.id).sort(() => Math.random() - 0.5),
+            teamSide: nonRedraftSide
+        } : null;
+
+        // 7. Sync to Room
+        await updateRoom(state.roomId, {
+            phase: 'DRAFT',
+            pot: newPot,
+            draft_phase: redraftSide.toUpperCase(),
+            current_turn_index: 0,
+            draft_order: finalDraftOrder,
+            game_data: {
+                teams: state.teams,
+                availablePlayers: state.availablePlayers,
+                originalRoster: state.originalRoster,
+                pendingCatchUp: pendingCatchUp // Store in game_data
+            }
+        });
+    };
 
 
 

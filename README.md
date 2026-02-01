@@ -15,13 +15,21 @@
 3.  **Open the App**:
     -   Click the link in the terminal (usually `http://localhost:5173`).
 
-## How to Play (Local/Mock Mode)
+## How to Play (Supabase Connected)
 
-Since we haven't connected a real Supabase backend yet, the app runs in **Local Memory**. Refreshing the page will reset the game.
+This app uses Supabase for real-time multiplayer.
 
-1.  **Join Screen**:
-    -   Open the app in one tab. Cick **"I'm the Admin"** -> **Create Room**.
-    -   (Optional) Open the app in a second tab (Incognito). Click **"I'm a Player"**, enter a name, and join. *Note: Since we are mocking, the "Room Code" doesn't actually network between tabs yet. For V1 testing, just use the Admin view to add "test users" manually in Setup.*
+1.  **Configuration**:
+    -   Ensure you have a valid `.env` or `.env.local` file with:
+        ```
+        VITE_SUPABASE_URL=your_project_url
+        VITE_SUPABASE_ANON_KEY=your_anon_key
+        ```
+
+2.  **Join Screen**:
+    -   **Admin**: Open the app, select "I'm the Admin", and "Start Setup". This creates a new room in the database.
+    -   **Player**: Open the app on another device (or tab), select "I'm a Player", enter the Room Code shown on the Admin screen, and your name.
+
 
 2.  **Setup**:
     -   Add Participants (e.g., "Mike", "John").
