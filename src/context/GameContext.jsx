@@ -406,14 +406,31 @@ function gameReducer(state, action) {
             // Sync room state from Supabase real-time update
             // CRITICAL: Preserve myParticipantId - it should NEVER be reset by room sync
             const roomData = action.payload;
+            const syncedPhase = roomData.phase ?? state.phase;
+            const syncedGameData = roomData.game_data || {};
+            const syncedPendingCatchUp = syncedGameData.pendingCatchUp || state.pendingCatchUp;
+
+            // Check if WE are in the pending catch-up list (Late Joiner Logic)
+            let localPhase = syncedPhase;
+            let localDraftOrder = roomData.draft_order ?? state.draftOrder;
+
+            // If we are in pendingCatchUp, force us into DRAFT mode locally
+            if ((syncedPhase === 'LIVE' || syncedPhase === 'PAUSED') &&
+                syncedPendingCatchUp?.participantIds?.includes(state.myParticipantId)) {
+                console.log('🎯 Catch-up Mode Triggered for me!');
+                localPhase = 'DRAFT';
+                // Set order to just me so I can pick
+                localDraftOrder = [state.myParticipantId];
+            }
+
             return {
                 ...state,
-                phase: roomData.phase ?? state.phase,
+                phase: localPhase, // Use local phase override if catching up
                 pot: roomData.pot ?? state.pot,
                 ante: roomData.ante ?? state.ante,
                 draftPhase: roomData.draft_phase ?? state.draftPhase,
                 currentTurnIndex: roomData.current_turn_index ?? state.currentTurnIndex,
-                draftOrder: roomData.draft_order ?? state.draftOrder,
+                draftOrder: localDraftOrder, // Use local order override if catching up
                 // game_data expansion
                 teams: roomData.game_data?.teams ?? state.teams,
                 availablePlayers: roomData.game_data?.availablePlayers ?? state.availablePlayers,
@@ -722,6 +739,33 @@ export function GameProvider({ children }) {
             let nextDraftOrder = state.draftOrder;
             let nextPhase = state.phase;
 
+            // CATCH-UP LOGIC: Check if this was a catch-up pick
+            const existingPending = state.game_data?.pendingCatchUp || state.pendingCatchUp;
+            let newPendingCatchUp = existingPending;
+
+            if (existingPending?.participantIds?.includes(participantId)) {
+                console.log('🎯 Processing Catch-up Pick');
+                // Check if they are now done (have both Home and Away players)
+                // We optimistically use the NEW roster values we just calculated
+                const hasHome = (teamSide === 'home') ? true : (participant.roster.home.length > 0);
+                const hasAway = (teamSide === 'away') ? true : (participant.roster.away.length > 0);
+
+                if (hasHome && hasAway) {
+                    console.log('✅ Catch-up Complete for:', participant.name);
+                    // Remove from pending list
+                    newPendingCatchUp = {
+                        ...existingPending,
+                        participantIds: existingPending.participantIds.filter(id => id !== participantId)
+                    };
+                    // Don't advance global turn index for catch-up picks
+                    nextTurnIndex = state.currentTurnIndex;
+                } else {
+                    console.log('⏳ Catch-up Incomplete - waiting for other team pick');
+                    // Don't advance global turn index
+                    nextTurnIndex = state.currentTurnIndex;
+                }
+            }
+
             // Simple transition logic mirroring reducer
             // Note: This duplicates reducer logic. In production, refactor into shared pure function.
             const isRoundComplete = nextTurnIndex >= state.draftOrder.length;
@@ -756,7 +800,8 @@ export function GameProvider({ children }) {
                 game_data: {
                     teams: state.teams,
                     availablePlayers: newAvailable,
-                    originalRoster: state.originalRoster
+                    originalRoster: state.originalRoster,
+                    pendingCatchUp: newPendingCatchUp // Sync updated pending catch-up list
                 },
                 current_turn_index: nextTurnIndex,
                 draft_phase: nextDraftPhase,
