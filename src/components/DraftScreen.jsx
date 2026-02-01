@@ -12,14 +12,23 @@ export default function DraftScreen({ isCatchUp = false }) {
     const hasAway = me?.roster.away?.length > 0;
 
     // Filter available players
-    const players = state.availablePlayers[tab] || [];
-
     const handlePick = async (player) => {
         if (pickingId) return; // Prevent double click
+
+        // Enforce 1 player per side limit
+        if (tab === 'home' && hasHome) { alert("You already have a Home player."); return; }
+        if (tab === 'away' && hasAway) { alert("You already have an Away player."); return; }
+
         if (confirm(`Draft ${player.name}?`)) {
             setPickingId(player.id);
-            await makePick(player, tab);
+            const success = await makePick(player, tab);
             setPickingId(null);
+
+            // Auto-switch tab if successful and needed
+            if (success) {
+                if (tab === 'home' && !hasAway) setTab('away');
+                if (tab === 'away' && !hasHome) setTab('home');
+            }
         }
     };
 
@@ -51,24 +60,28 @@ export default function DraftScreen({ isCatchUp = false }) {
             <div className="flex-1 overflow-y-auto space-y-2 pb-20">
                 {players.length === 0 && <div className="text-center text-slate-500 py-10">No players available</div>}
 
-                {players.map(p => (
-                    <button
-                        key={p.id}
-                        onClick={() => handlePick(p)}
-                        disabled={!!pickingId}
-                        className={`w-full flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-blue-500 hover:bg-slate-700 transition group disabled:opacity-50 disabled:cursor-not-allowed`}
-                    >
-                        <div className="text-left">
-                            <div className="font-bold text-lg group-hover:text-blue-400">
-                                {pickingId === p.id ? 'Drafting...' : p.name}
+                {players.map(p => {
+                    const isSideFull = (tab === 'home' && hasHome) || (tab === 'away' && hasAway);
+
+                    return (
+                        <button
+                            key={p.id}
+                            onClick={() => handlePick(p)}
+                            disabled={!!pickingId || isSideFull}
+                            className={`w-full flex justify-between items-center bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-blue-500 hover:bg-slate-700 transition group disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                            <div className="text-left">
+                                <div className="font-bold text-lg group-hover:text-blue-400">
+                                    {pickingId === p.id ? 'Drafting...' : p.name}
+                                </div>
+                                <div className="text-xs text-slate-400">{p.pos} #{p.num}</div>
                             </div>
-                            <div className="text-xs text-slate-400">{p.pos} #{p.num}</div>
-                        </div>
-                        <div className="bg-slate-900 px-3 py-1 rounded text-xs font-bold text-slate-300">
-                            {pickingId === p.id ? '...' : 'DRAFT'}
-                        </div>
-                    </button>
-                ))}
+                            <div className="bg-slate-900 px-3 py-1 rounded text-xs font-bold text-slate-300">
+                                {pickingId === p.id ? '...' : (isSideFull ? 'FULL' : 'DRAFT')}
+                            </div>
+                        </button>
+                    )
+                })}
             </div>
 
             {/* Status Footer */}

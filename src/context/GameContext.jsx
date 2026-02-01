@@ -307,23 +307,35 @@ export function GameProvider({ children }) {
         await updateRoom(state.roomId, { available_players: newAvailable });
     };
 
-    // --- Subscription ---
+    // --- Subscription & Polling ---
     useEffect(() => {
         if (!state.roomId) {
             rejoin();
             return;
         }
 
+        // 1. Realtime Subscription (Fastest)
         const unsub = subscribeToRoom(
             state.roomId,
             (room) => dispatch({ type: 'SYNC_ROOM', payload: room }),
-            (parts) => dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts }) // parts needs formatting?
-            // DB returns roster_home / roster_away.
-            // Component expects roster.home / roster.away.
-            // Let's format inside the reducer or here?
-            // Formatting here is safer.
+            (parts) => dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts })
         );
-        return () => { if (unsub) unsub(); };
+
+        // 2. Polling Fallback (Reliable)
+        // Fixes "Phone not syncing" if Realtime is disabled on server
+        const intervalId = setInterval(async () => {
+            const { data: room } = await getRoomByCode(state.roomCode);
+            if (room) {
+                dispatch({ type: 'SYNC_ROOM', payload: room });
+                const { data: parts } = await getParticipantsByRoom(room.id);
+                if (parts) dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
+            }
+        }, 3000); // 3 seconds
+
+        return () => {
+            if (unsub) unsub();
+            clearInterval(intervalId);
+        };
     }, [state.roomId]);
 
     const value = {
