@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useGame } from '../context/GameContext';
 import { Plus, Trash2, DollarSign, Play, Pencil, UserPlus, X, Check, Users, Loader2 } from 'lucide-react';
 import { cn, generateCode } from '../lib/utils';
-import { fetchGames, fetchGameRosters } from '../lib/espn';
+import { fetchGames, fetchGameRosters, fetchRoster, NFL_TEAMS } from '../lib/espn';
 
 // ESPN API replaces mock data - games fetched on mount
 
@@ -50,8 +50,8 @@ export default function SetupScreen() {
 
     // Custom Game State
     const [isCustomMode, setIsCustomMode] = useState(false);
-    const [customHome, setCustomHome] = useState({ name: 'Team A', color: '#ef4444' });
-    const [customAway, setCustomAway] = useState({ name: 'Team B', color: '#3b82f6' });
+    const [customHomeTeamId, setCustomHomeTeamId] = useState(NFL_TEAMS[0]?.id || '');
+    const [customAwayTeamId, setCustomAwayTeamId] = useState(NFL_TEAMS[1]?.id || '');
 
     // Fetch games on mount
     useEffect(() => {
@@ -99,17 +99,46 @@ export default function SetupScreen() {
 
     const handleConfirmGame = async () => {
         if (isCustomMode) {
-            dispatch({
-                type: 'SET_GAME_DATA',
-                payload: {
-                    teams: {
-                        home: { id: 'C_HOME', name: customHome.name, color: customHome.color, abbrev: customHome.name.substring(0, 3).toUpperCase() },
-                        away: { id: 'C_AWAY', name: customAway.name, color: customAway.color, abbrev: customAway.name.substring(0, 3).toUpperCase() }
-                    },
-                    roster: { home: [], away: [] }, // Start empty, user adds manually
-                    gameId: 'CUSTOM_' + Date.now()
-                }
-            });
+            const homeTeam = NFL_TEAMS.find(t => t.id === customHomeTeamId);
+            const awayTeam = NFL_TEAMS.find(t => t.id === customAwayTeamId);
+
+            if (!homeTeam || !awayTeam) return;
+
+            setRosterLoading(true);
+            try {
+                const [homeRoster, awayRoster] = await Promise.all([
+                    fetchRoster(homeTeam.id, homeTeam.abbrev),
+                    fetchRoster(awayTeam.id, awayTeam.abbrev)
+                ]);
+
+                // Team color mapping
+                const TEAM_COLORS = {
+                    ARI: '#97233F', ATL: '#A71930', BAL: '#241773', BUF: '#00338D',
+                    CAR: '#0085CA', CHI: '#0B162A', CIN: '#FB4F14', CLE: '#311D00',
+                    DAL: '#003594', DEN: '#FB4F14', DET: '#0076B6', GB: '#203731',
+                    HOU: '#03202F', IND: '#002C5F', JAX: '#006778', KC: '#E31837',
+                    LAC: '#0080C6', LAR: '#003594', LV: '#000000', MIA: '#008E97',
+                    MIN: '#4F2683', NE: '#002244', NO: '#D3BC8D', NYG: '#0B2265',
+                    NYJ: '#125740', PHI: '#004C54', PIT: '#FFB612', SEA: '#002244',
+                    SF: '#AA0000', TB: '#D50A0A', TEN: '#0C2340', WAS: '#5A1414'
+                };
+
+                dispatch({
+                    type: 'SET_GAME_DATA',
+                    payload: {
+                        teams: {
+                            home: { id: homeTeam.id, name: homeTeam.name, color: TEAM_COLORS[homeTeam.abbrev] || '#333', abbrev: homeTeam.abbrev },
+                            away: { id: awayTeam.id, name: awayTeam.name, color: TEAM_COLORS[awayTeam.abbrev] || '#333', abbrev: awayTeam.abbrev }
+                        },
+                        roster: { home: homeRoster, away: awayRoster },
+                        gameId: 'CUSTOM_' + Date.now()
+                    }
+                });
+            } catch (err) {
+                setGamesError(err.message || 'Failed to fetch rosters');
+            } finally {
+                setRosterLoading(false);
+            }
             return;
         }
 
@@ -218,35 +247,34 @@ export default function SetupScreen() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-xs text-slate-400">Home Team</label>
-                                    <input
-                                        value={customHome.name}
-                                        onChange={e => setCustomHome({ ...customHome, name: e.target.value })}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded p-2"
-                                        placeholder="Team Name"
-                                    />
-                                    <input
-                                        type="color"
-                                        value={customHome.color}
-                                        onChange={e => setCustomHome({ ...customHome, color: e.target.value })}
-                                        className="w-full h-8 cursor-pointer rounded"
-                                    />
+                                    <select
+                                        value={customHomeTeamId}
+                                        onChange={e => setCustomHomeTeamId(e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-primary"
+                                    >
+                                        {NFL_TEAMS.map(team => (
+                                            <option key={team.id} value={team.id}>
+                                                {team.abbrev} - {team.name}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs text-slate-400">Away Team</label>
-                                    <input
-                                        value={customAway.name}
-                                        onChange={e => setCustomAway({ ...customAway, name: e.target.value })}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded p-2"
-                                        placeholder="Team Name"
-                                    />
-                                    <input
-                                        type="color"
-                                        value={customAway.color}
-                                        onChange={e => setCustomAway({ ...customAway, color: e.target.value })}
-                                        className="w-full h-8 cursor-pointer rounded"
-                                    />
+                                    <select
+                                        value={customAwayTeamId}
+                                        onChange={e => setCustomAwayTeamId(e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded p-3 text-lg font-bold outline-none focus:ring-2 focus:ring-primary"
+                                    >
+                                        {NFL_TEAMS.map(team => (
+                                            <option key={team.id} value={team.id}>
+                                                {team.abbrev} - {team.name}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
+                            <p className="text-xs text-slate-500 text-center">Rosters will be imported from ESPN when you confirm.</p>
                         </div>
                     ) : (
                         <>

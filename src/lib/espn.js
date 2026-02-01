@@ -17,6 +17,42 @@ const TEAM_COLORS = {
     AFC: '#D50A0A', NFC: '#003594'
 };
 
+// All 32 NFL Teams for roster import
+export const NFL_TEAMS = [
+    { id: '22', abbrev: 'ARI', name: 'Cardinals' },
+    { id: '1', abbrev: 'ATL', name: 'Falcons' },
+    { id: '33', abbrev: 'BAL', name: 'Ravens' },
+    { id: '2', abbrev: 'BUF', name: 'Bills' },
+    { id: '29', abbrev: 'CAR', name: 'Panthers' },
+    { id: '3', abbrev: 'CHI', name: 'Bears' },
+    { id: '4', abbrev: 'CIN', name: 'Bengals' },
+    { id: '5', abbrev: 'CLE', name: 'Browns' },
+    { id: '6', abbrev: 'DAL', name: 'Cowboys' },
+    { id: '7', abbrev: 'DEN', name: 'Broncos' },
+    { id: '8', abbrev: 'DET', name: 'Lions' },
+    { id: '9', abbrev: 'GB', name: 'Packers' },
+    { id: '34', abbrev: 'HOU', name: 'Texans' },
+    { id: '11', abbrev: 'IND', name: 'Colts' },
+    { id: '30', abbrev: 'JAX', name: 'Jaguars' },
+    { id: '12', abbrev: 'KC', name: 'Chiefs' },
+    { id: '24', abbrev: 'LAC', name: 'Chargers' },
+    { id: '14', abbrev: 'LAR', name: 'Rams' },
+    { id: '13', abbrev: 'LV', name: 'Raiders' },
+    { id: '15', abbrev: 'MIA', name: 'Dolphins' },
+    { id: '16', abbrev: 'MIN', name: 'Vikings' },
+    { id: '17', abbrev: 'NE', name: 'Patriots' },
+    { id: '18', abbrev: 'NO', name: 'Saints' },
+    { id: '19', abbrev: 'NYG', name: 'Giants' },
+    { id: '20', abbrev: 'NYJ', name: 'Jets' },
+    { id: '21', abbrev: 'PHI', name: 'Eagles' },
+    { id: '23', abbrev: 'PIT', name: 'Steelers' },
+    { id: '25', abbrev: 'SF', name: '49ers' },
+    { id: '26', abbrev: 'SEA', name: 'Seahawks' },
+    { id: '27', abbrev: 'TB', name: 'Buccaneers' },
+    { id: '10', abbrev: 'TEN', name: 'Titans' },
+    { id: '28', abbrev: 'WAS', name: 'Commanders' }
+].sort((a, b) => a.name.localeCompare(b.name));
+
 /**
  * Fetch today's NFL games from ESPN
  * @returns {Promise<Array>} Array of game objects
