@@ -25,9 +25,9 @@ const getInitialState = () => {
 
     // Synchronous Restore
     try {
-        const lastCode = localStorage.getItem('football_last_room');
+        const lastCode = sessionStorage.getItem('football_last_room');
         if (lastCode) {
-            const session = JSON.parse(localStorage.getItem(`football_session_${lastCode}`));
+            const session = JSON.parse(sessionStorage.getItem(`football_session_${lastCode}`));
             if (session) {
                 return {
                     ...base,
@@ -119,8 +119,8 @@ export function GameProvider({ children }) {
     }));
 
     const saveSession = (code, id, isAdmin) => {
-        localStorage.setItem(`football_session_${code}`, JSON.stringify({ id, isAdmin }));
-        localStorage.setItem('football_last_room', code);
+        sessionStorage.setItem(`football_session_${code}`, JSON.stringify({ id, isAdmin }));
+        sessionStorage.setItem('football_last_room', code);
     };
 
     const createRoom = async (adminName, homeTeam, awayTeam) => {
@@ -177,9 +177,9 @@ export function GameProvider({ children }) {
     };
 
     const rejoin = async () => {
-        const lastCode = localStorage.getItem('football_last_room');
+        const lastCode = sessionStorage.getItem('football_last_room');
         if (!lastCode) return;
-        const session = JSON.parse(localStorage.getItem(`football_session_${lastCode}`));
+        const session = JSON.parse(sessionStorage.getItem(`football_session_${lastCode}`));
         if (!session) return;
 
         console.log('🔄 Rejoining Session:', session);
