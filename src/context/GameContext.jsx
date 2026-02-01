@@ -570,11 +570,14 @@ export function GameProvider({ children }) {
         // 2. Find new participants who need catch-up (missing player on non-scoring team)
         const needsCatchUp = state.participants.filter(p => p.roster[nonRedraftSide].length === 0);
 
-        // 3. Update Participants (Deduct Ante)
-        const deductionPromises = state.participants.map(p =>
-            updateParticipant(p.id, { balance: p.balance - state.ante })
+        // 3. Update Participants (Deduct Ante + Clear Rosters for Redraft Side)
+        const participantUpdatePromises = state.participants.map(p =>
+            updateParticipant(p.id, {
+                balance: p.balance - state.ante,
+                [`roster_${redraftSide}`]: [] // Clear roster for redraft side
+            })
         );
-        await Promise.all(deductionPromises);
+        await Promise.all(participantUpdatePromises);
 
         // 4. Calculate New Draft Order
         // Touchdown logic already set draftOrder to [shuffled losers..., winner]
@@ -608,7 +611,13 @@ export function GameProvider({ children }) {
             teamSide: nonRedraftSide
         } : null;
 
-        // 7. Sync to Room
+        // 7. RESET Available Players for the Redraft Side from Original Roster
+        const resetAvailablePlayers = {
+            ...state.availablePlayers,
+            [redraftSide]: [...state.originalRoster[redraftSide]]
+        };
+
+        // 8. Sync to Room
         await updateRoom(state.roomId, {
             phase: 'DRAFT',
             pot: newPot,
@@ -617,7 +626,7 @@ export function GameProvider({ children }) {
             draft_order: finalDraftOrder,
             game_data: {
                 teams: state.teams,
-                availablePlayers: state.availablePlayers,
+                availablePlayers: resetAvailablePlayers, // FIXED: Reset from original
                 originalRoster: state.originalRoster,
                 pendingCatchUp: pendingCatchUp // Store in game_data
             }
