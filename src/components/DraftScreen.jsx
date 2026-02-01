@@ -34,8 +34,11 @@ export default function DraftScreen() {
         filterPos === 'ALL' ? true : p.pos === filterPos
     );
 
+    const isMyTurn = currentDrafter && (currentDrafter.id === state.myParticipantId || state.isAdmin);
+
     const handleSelect = (player) => {
         if (!currentDrafter) return;
+        if (!isMyTurn) return; // Prevent picking out of turn
         makePick(currentDrafter.id, player, activeTeamSide);
     };
 
@@ -54,7 +57,9 @@ export default function DraftScreen() {
                     <h2 className="text-4xl font-bold text-white">
                         {currentDrafter ? currentDrafter.name : 'Completed'}
                     </h2>
-                    <p className="text-slate-400">is on the clock</p>
+                    <p className={cn("text-lg font-bold", isMyTurn ? "text-emerald-400 animate-pulse" : "text-slate-400")}>
+                        {isMyTurn ? "IT'S YOUR TURN!" : "is on the clock"}
+                    </p>
                 </div>
 
                 <div className="flex justify-center items-center gap-2 text-2xl font-mono text-accent">
@@ -110,7 +115,8 @@ export default function DraftScreen() {
                                 "flex items-center justify-between p-4 border rounded-lg transition group text-left",
                                 state.draftPhase === 'HOME'
                                     ? "bg-sky-900/20 border-sky-800/50 hover:border-sky-500 hover:bg-sky-900/40"
-                                    : "bg-emerald-900/20 border-emerald-800/50 hover:border-emerald-500 hover:bg-emerald-900/40"
+                                    : "bg-emerald-900/20 border-emerald-800/50 hover:border-emerald-500 hover:bg-emerald-900/40",
+                                !isMyTurn && "opacity-50 cursor-not-allowed hover:bg-transparent hover:border-slate-800"
                             )}
                         >
                             <div>
@@ -122,7 +128,8 @@ export default function DraftScreen() {
                             </div>
                             <div className={cn(
                                 "opacity-0 group-hover:opacity-100 font-bold",
-                                state.draftPhase === 'HOME' ? "text-sky-400" : "text-emerald-400"
+                                state.draftPhase === 'HOME' ? "text-sky-400" : "text-emerald-400",
+                                !isMyTurn && "hidden"
                             )}>
                                 Select
                             </div>

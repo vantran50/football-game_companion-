@@ -417,6 +417,41 @@ export default function SetupScreen() {
     // --- UI Phase: Room Setup (Room Created, Add Participants, Start Draft) ---
     // Also handles PAUSED state for intermission and REVIEW for post-draft
 
+    // NON-ADMIN VIEW: Waiting Screen
+    if (!state.isAdmin) {
+        return (
+            <div className="max-w-xl mx-auto space-y-8 pt-20 text-center">
+                <div className="bg-surface p-8 rounded-2xl border border-slate-700 shadow-2xl space-y-6">
+                    <Loader2 className="w-16 h-16 text-primary animate-spin mx-auto" />
+
+                    <div>
+                        <h2 className="text-3xl font-bold">Waiting for Host...</h2>
+                        <p className="text-slate-400 mt-2">
+                            {isPausing ? 'The commissioner is setting up the next round.' : 'The game will start shortly.'}
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-700/50">
+                        <div className="bg-slate-900/50 p-4 rounded-xl">
+                            <div className="text-xs text-slate-500 uppercase font-bold">Pot</div>
+                            <div className="text-2xl font-mono text-emerald-400">${state.pot}</div>
+                        </div>
+                        <div className="bg-slate-900/50 p-4 rounded-xl">
+                            <div className="text-xs text-slate-500 uppercase font-bold">Ante</div>
+                            <div className="text-2xl font-mono text-slate-300">${state.ante}</div>
+                        </div>
+                    </div>
+
+                    {state.roomCode && (
+                        <div className="inline-block px-4 py-2 bg-slate-800 rounded-full text-sm font-mono text-slate-400">
+                            Room: <span className="text-white font-bold">{state.roomCode}</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="flex justify-between items-end">
