@@ -330,7 +330,7 @@ export function GameProvider({ children }) {
                 const { data: parts } = await getParticipantsByRoom(room.id);
                 if (parts) dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
             }
-        }, 3000); // 3 seconds
+        }, 1500); // 1.5 seconds (Faster Sync)
 
         return () => {
             if (unsub) unsub();
