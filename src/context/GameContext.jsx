@@ -980,6 +980,12 @@ export function GameProvider({ children }) {
         // 2. Fetch existing participants
         const { data: participants } = await getParticipantsByRoom(room.id);
 
+        // Check for duplicate name
+        const nameExists = participants?.some(p => p.name.toLowerCase() === playerName.trim().toLowerCase());
+        if (nameExists) {
+            return { success: false, error: 'A participant with this name already exists. Please use a different name.' };
+        }
+
         // 3. Add self as participant
         const { data: newParticipant, error: participantError } = await addParticipantDb(
             room.id,

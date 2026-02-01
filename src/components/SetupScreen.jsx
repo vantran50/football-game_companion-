@@ -83,6 +83,12 @@ export default function SetupScreen() {
 
     const handleAdd = () => {
         if (!newPlayer) return;
+        // Check for duplicate name
+        const nameExists = state.participants.some(p => p.name.toLowerCase() === newPlayer.trim().toLowerCase());
+        if (nameExists) {
+            alert('A participant with this name already exists. Please use a different name.');
+            return;
+        }
         addParticipant(newPlayer, buyIn);
         setNewPlayer('');
     };
