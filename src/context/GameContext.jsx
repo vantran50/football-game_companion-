@@ -995,14 +995,12 @@ export function GameProvider({ children }) {
                 lastWinner: room.game_data?.lastWinner,
                 winnerId: room.winner_id,
                 myParticipantId: me.id, // Set participant ID for this user
-                isAdmin: me.is_admin // Preserve admin status from database
+                isAdmin: me.is_admin, // Preserve admin status from database
+                participants: participants // Bulk load all participants
             }
         });
 
-        // Load all participants
-        participants.forEach(p => {
-            dispatch({ type: 'SYNC_PARTICIPANT_ADD', payload: p });
-        });
+        // No need to loop dispatch SYNC_PARTICIPANT_ADD anymore
     };
 
     // Auto-Rejoin Effect

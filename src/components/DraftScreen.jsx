@@ -22,8 +22,27 @@ export default function DraftScreen() {
     }, [state.currentTurnIndex]); // Reset on turn change
 
     const currentDrafter = state.participants.find(p => p.id === state.draftOrder[state.currentTurnIndex]);
-    const activeTeamSide = state.draftPhase === 'HOME' ? 'home' : 'away';
-    const activeTeam = state.draftPhase === 'HOME' ? state.teams.home : state.teams.away;
+
+    // ROBUST CATCH-UP LOGIC:
+    // If I'm drafting but global phase is NOT 'DRAFT' (i.e., catch-up),
+    // OR if I'm in the pending catch-up list,
+    // determine active side based on MY roster needs, ignoring global state.draftPhase.
+    let computedDraftPhase = state.draftPhase;
+
+    // Check if this is a catch-up scenario
+    const isCatchUp = (state.phase === 'LIVE' || state.phase === 'PAUSED') ||
+        state.game_data?.pendingCatchUp?.participantIds?.includes(currentDrafter?.id);
+
+    if (isCatchUp && currentDrafter) {
+        if (currentDrafter.roster.home.length === 0) {
+            computedDraftPhase = 'HOME';
+        } else if (currentDrafter.roster.away.length === 0) {
+            computedDraftPhase = 'AWAY';
+        }
+    }
+
+    const activeTeamSide = computedDraftPhase === 'HOME' ? 'home' : 'away';
+    const activeTeam = computedDraftPhase === 'HOME' ? state.teams.home : state.teams.away;
 
     // CRITICAL: Only show players from the ACTIVE team's pool
     // Players are removed from availablePlayers when drafted (in reducer)
