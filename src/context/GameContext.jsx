@@ -74,7 +74,7 @@ function gameReducer(state, action) {
                 lastWinner: action.payload.lastWinner || state.lastWinner,
                 participants: action.payload.participants || [],
                 myParticipantId: action.payload.myParticipantId,
-                isAdmin: false // Explicitly set - players joining are never admin
+                isAdmin: action.payload.isAdmin ?? false // Accept from payload, default false for new joins
             };
         case 'SET_GAME_DATA':
             return {
@@ -103,7 +103,11 @@ function gameReducer(state, action) {
             const totalCollected = state.participants.length * state.ante;
             return {
                 ...state,
-                participants: state.participants.map(p => ({ ...p, balance: p.balance - state.ante })),
+                // Prevent negative balances - use Math.max(0, balance - ante)
+                participants: state.participants.map(p => ({
+                    ...p,
+                    balance: Math.max(0, p.balance - state.ante)
+                })),
                 pot: state.pot + totalCollected,
                 phase: 'DRAFT',
                 draftPhase: 'HOME', // Always start with Home (or Team A)
@@ -597,7 +601,7 @@ export function GameProvider({ children }) {
         // 3. Update Participants (Deduct Ante + Clear Rosters for Redraft Side)
         const participantUpdatePromises = state.participants.map(p =>
             updateParticipant(p.id, {
-                balance: p.balance - state.ante,
+                balance: Math.max(0, p.balance - state.ante), // Prevent negative balances
                 [`roster_${redraftSide}`]: [] // Clear roster for redraft side
             })
         );
@@ -905,17 +909,17 @@ export function GameProvider({ children }) {
                 draftPhase: room.draft_phase,
                 currentTurnIndex: room.current_turn_index,
                 draftOrder: room.draft_order,
-                teams: room.game_data.teams,
-                availablePlayers: room.game_data.availablePlayers,
-                originalRoster: room.game_data.originalRoster,
-                winnerId: room.winner_id
+                teams: room.game_data?.teams,
+                availablePlayers: room.game_data?.availablePlayers,
+                originalRoster: room.game_data?.originalRoster,
+                lastWinner: room.game_data?.lastWinner,
+                winnerId: room.winner_id,
+                myParticipantId: me.id, // Set participant ID for this user
+                isAdmin: me.is_admin // Preserve admin status from database
             }
         });
 
-        if (me.is_admin) {
-            dispatch({ type: 'SET_ADMIN' });
-        }
-
+        // Load all participants
         participants.forEach(p => {
             dispatch({ type: 'SYNC_PARTICIPANT_ADD', payload: p });
         });
