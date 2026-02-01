@@ -466,8 +466,36 @@ export default function SetupScreen() {
         const myParticipant = state.participants.find(p => p.id === state.myParticipantId);
         const myBalance = myParticipant?.balance ?? 0;
 
+        // Check if there's a recent winner (within last 60 seconds)
+        const lastWinner = state.lastWinner;
+        const isRecentWin = lastWinner && (Date.now() - lastWinner.timestamp < 60000);
+        const iAmTheWinner = lastWinner && myParticipant && lastWinner.participantId === myParticipant.id;
+
         return (
             <div className="max-w-xl mx-auto space-y-8 pt-20 text-center">
+                {/* Winner Notification Banner */}
+                {isRecentWin && (
+                    <div className={`p-6 rounded-2xl border-2 ${iAmTheWinner
+                            ? 'bg-gradient-to-r from-emerald-900/80 to-green-900/80 border-emerald-500'
+                            : 'bg-gradient-to-r from-slate-900 to-slate-800 border-slate-600'
+                        } animate-in slide-in-from-top duration-300`}>
+                        <div className="text-center">
+                            <div className={`text-3xl font-bold mb-2 ${iAmTheWinner ? 'text-emerald-300' : 'text-slate-200'
+                                }`}>
+                                {iAmTheWinner
+                                    ? '🎉 Congratulations! You won!'
+                                    : `Better luck next time! Winner: ${lastWinner.participantName}`}
+                            </div>
+                            <div className="text-slate-400">
+                                <span>Touchdown: {lastWinner.playerName}</span>
+                                {lastWinner.potWon > 0 && (
+                                    <span className="ml-2 text-emerald-400 font-bold">Pot: ${lastWinner.potWon}</span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="bg-surface p-8 rounded-2xl border border-slate-700 shadow-2xl space-y-6">
                     <Loader2 className="w-16 h-16 text-primary animate-spin mx-auto" />
 

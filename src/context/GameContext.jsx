@@ -44,6 +44,9 @@ const initialState = {
 
     // Multiplayer
     myParticipantId: null, // Set when joining as a non-admin player
+
+    // Last Winner (for notifications)
+    lastWinner: null, // { participantId, participantName, playerName, potWon, timestamp }
 };
 
 function gameReducer(state, action) {
@@ -409,6 +412,7 @@ function gameReducer(state, action) {
                 teams: roomData.game_data?.teams ?? state.teams,
                 availablePlayers: roomData.game_data?.availablePlayers ?? state.availablePlayers,
                 originalRoster: roomData.game_data?.originalRoster ?? state.originalRoster,
+                lastWinner: roomData.game_data?.lastWinner ?? state.lastWinner, // For winner notifications
 
                 pendingCatchUp: roomData.game_data?.pendingCatchUp ?? state.pendingCatchUp, // If stored in game_data
                 winnerId: roomData.winner_id ?? state.winnerId,
@@ -753,11 +757,13 @@ export function GameProvider({ children }) {
         dispatch({ type: 'TOUCHDOWN_SCORED', payload: { scoredByPlayerId: playerId, teamSide } });
 
         if (isLive && state.roomId) {
-            // 1. Find Winner
+            // 1. Find Winner and Scoring Player
             const winner = state.participants.find(p =>
                 p.roster[teamSide].some(pl => pl.id === playerId)
             );
             if (!winner) return;
+
+            const scoringPlayer = winner.roster[teamSide].find(pl => pl.id === playerId);
 
             // 2. Prepare Updates (Participants)
             const participantUpdates = state.participants.map(p => {
@@ -777,7 +783,7 @@ export function GameProvider({ children }) {
             const shuffledLosers = losers.map(p => p.id).sort(() => Math.random() - 0.5);
             const newDraftOrder = [...shuffledLosers, winner.id];
 
-            // 4. Update Room
+            // 4. Update Room with lastWinner for notifications
             const resetAvailablePlayers = {
                 ...state.availablePlayers,
                 [teamSide]: [...state.originalRoster[teamSide]]
@@ -792,7 +798,14 @@ export function GameProvider({ children }) {
                 game_data: {
                     teams: state.teams,
                     availablePlayers: resetAvailablePlayers,
-                    originalRoster: state.originalRoster
+                    originalRoster: state.originalRoster,
+                    lastWinner: {
+                        participantId: winner.id,
+                        participantName: winner.name,
+                        playerName: scoringPlayer?.name || 'Unknown',
+                        potWon: state.pot,
+                        timestamp: Date.now()
+                    }
                 }
             });
         }
