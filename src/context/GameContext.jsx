@@ -63,6 +63,37 @@ function gameReducer(state, action) {
             };
         case 'SYNC_PARTICIPANTS':
             return { ...state, participants: action.payload }; // Payload is RAW from DB
+        case 'OPTIMISTIC_PICK':
+            // Payload: { playerId, teamSide, myId }
+            const { playerId, teamSide, myId } = action.payload;
+
+            // 1. Remove from Available
+            const newAvail = {
+                ...state.availablePlayers,
+                [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== playerId)
+            };
+
+            // 2. Add to My Roster (in participants)
+            // Note: We are modifying the RAW participants array
+            const newParts = state.participants.map(p => {
+                if (p.id !== myId) return p;
+
+                // Construct new raw roster
+                const currentRaw = (teamSide === 'home') ? (p.roster_home || []) : (p.roster_away || []);
+                const newRaw = [...currentRaw, state.availablePlayers[teamSide].find(pl => pl.id === playerId)];
+
+                return {
+                    ...p,
+                    [teamSide === 'home' ? 'roster_home' : 'roster_away']: newRaw
+                };
+            });
+
+            return {
+                ...state,
+                availablePlayers: newAvail,
+                participants: newParts
+            };
+
         case 'RESET':
             return getInitialState();
         default:
@@ -183,46 +214,26 @@ export function GameProvider({ children }) {
     };
 
     const makePick = async (player, teamSide) => {
-        // 1. Get current participant data
         const me = state.participants.find(p => p.id === state.myId);
         if (!me) return;
 
-        // 2. Update Roster (Local Optimistic + DB)
-        const newRoster = { ...me.roster, [teamSide]: [...(me.roster[teamSide] || []), player] };
+        // 0. OPTIMISTIC UPDATE (Instant Feedback)
+        dispatch({ type: 'OPTIMISTIC_PICK', payload: { playerId: player.id, teamSide, myId: state.myId } });
 
-        // Supabase maps column roster_home / roster_away
+        // 1. DB Updates
+        const newRoster = { ...me.roster, [teamSide]: [...(me.roster[teamSide] || []), player] };
         let updatesPart = {};
         if (teamSide === 'home') updatesPart.roster_home = newRoster.home;
         if (teamSide === 'away') updatesPart.roster_away = newRoster.away;
 
+        // We run these in parallel for speed, but error handling is loose (MVP)
         await updateParticipant(me.id, updatesPart);
 
-        // 3. Update Room Available Players
         const newAvailable = {
             ...state.availablePlayers,
             [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== player.id)
         };
-
-        let updatesRoom = { available_players: newAvailable };
-
-        // 4. Global State Logic
-        if (state.phase === 'DRAFT') {
-            // Basic turn increment (visual only since we are loose with turns)
-            updatesRoom.current_turn_index = state.currentTurnIndex + 1;
-
-            // Check if draft complete?
-            // If everyone has Home + Away? -> Go LIVE
-            // We can do this check loosely.
-            // Or just let Admin click "Start Game" manually?
-            // Auto-start is better.
-            // But syncing that check is hard.
-            // Let's just stay in DRAFT until Admin clicks "Start Game" or manual trigger?
-            // Or, if *I* am the last one...
-            // Let's keep it simple: DRAFT phase stays until Admin clicks "Start Game".
-        }
-
-        // If CATCH-UP (LIVE), we check roster completeness in App.jsx.
-        // We do NOT change phase here.
+        const updatesRoom = { available_players: newAvailable, current_turn_index: state.currentTurnIndex + 1 };
 
         await updateRoom(state.roomId, updatesRoom);
     };
