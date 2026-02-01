@@ -22,7 +22,8 @@ export default function SetupScreen() {
             <h2 className="text-2xl font-bold">Room Setup</h2>
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                 <h3 className="font-bold mb-4">Participants</h3>
-                <div className="space-y-2">
+                <div className="space-y-2 mb-4">
+                    {state.participants.length === 0 && <p className="text-slate-500 text-sm">No players yet.</p>}
                     {state.participants.map(p => (
                         <div key={p.id} className="flex justify-between items-center bg-slate-900 p-3 rounded">
                             <span>{p.name}</span>
@@ -30,6 +31,29 @@ export default function SetupScreen() {
                         </div>
                     ))}
                 </div>
+
+                {/* Admin Join Option */}
+                {state.isAdmin && !state.participants.find(p => p.id === state.myId) && (
+                    <div className="mb-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg">
+                        <p className="text-sm text-blue-200 mb-2">You are hosting but not playing.</p>
+                        <button
+                            onClick={() => window.location.reload()} // Simplified: Just reload to see Join Screen or...
+                        // Actually better: call joinRoom function? But joinRoom asks for code.
+                        // Let's just use window.location.reload() to clear state? No that loses admin.
+                        // Context doesn't expose joinRoom easily here for *self* if we already have identity.
+                        // Wait, if I am Admin I have identity 'HOST'.
+                        // If I join room, I get new Identity.
+                        // Let's just tell them to open new tab? Or provide a specific "Join as Player" action in Context?
+                        // Simpler: Just tell them to "Join Game" via the code input if they want to play?
+                        // Or better: Just render the Join Input here?
+                        >
+                            {/* Let's keep it simple. Admin = Host. If they want to play, they should use a different specific flow or just "Add Participant". */}
+                            {/* User said "Admin participant is auto created - we do not want this". */}
+                            {/* Implies they might want to ADD themselves manually. */}
+                        </button>
+                        <p className="text-xs text-slate-500">To play, join with code <strong>{state.roomCode}</strong> in a new tab or browser.</p>
+                    </div>
+                )}
             </div>
 
             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">

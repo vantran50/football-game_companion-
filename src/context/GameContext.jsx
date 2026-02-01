@@ -83,18 +83,15 @@ export function GameProvider({ children }) {
             ante: 2 // Default Ante
         });
 
-        // Add Admin Participant
-        const { data: p, error: pError } = await addParticipantDb(room.id, adminName, true);
-        if (pError) { console.error(pError); return; }
-
-        // Save Identity
-        saveSession(code, p.id, true);
-        dispatch({ type: 'SET_IDENTITY', payload: { id: p.id, isAdmin: true } });
+        // Save Identity (ADMIN HOST ONLY - No Participant Row yet)
+        // User can join later if they want to play.
+        saveSession(code, 'HOST', true);
+        dispatch({ type: 'SET_IDENTITY', payload: { id: 'HOST', isAdmin: true } });
         dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: code } });
         roomIdRef.current = room.id;
 
-        // Initial Participant Sync
-        dispatch({ type: 'SYNC_PARTICIPANTS', payload: [p] });
+        // Initial Participant Sync (Empty)
+        dispatch({ type: 'SYNC_PARTICIPANTS', payload: [] });
     };
 
     const joinRoom = async (code, name) => {
@@ -113,7 +110,10 @@ export function GameProvider({ children }) {
 
         // Initial Fetch
         const { data: parts } = await getParticipantsByRoom(room.id);
-        if (parts) dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
+        if (parts) {
+            console.log('✅ Initial Join Participants Fetch:', parts);
+            dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
+        }
     };
 
     const rejoin = async () => {
@@ -121,6 +121,8 @@ export function GameProvider({ children }) {
         if (!lastCode) return;
         const session = JSON.parse(localStorage.getItem(`football_session_${lastCode}`));
         if (!session) return;
+
+        console.log('🔄 Rejoining Session:', session);
 
         const { data: room } = await getRoomByCode(lastCode);
         if (!room) return;
@@ -133,7 +135,12 @@ export function GameProvider({ children }) {
 
         // Initial Fetch
         const { data: parts } = await getParticipantsByRoom(room.id);
-        if (parts) dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
+        if (parts) {
+            console.log('🔄 Rejoin Participants Fetch:', parts.length);
+            dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
+        } else {
+            console.error('⚠️ Rejoin fetched 0 participants or failed.');
+        }
     };
 
     const startDraft = async () => {
