@@ -576,7 +576,8 @@ export function GameProvider({ children }) {
 
                 // Add Admin as first participant immediately
                 // Pass 'code' explicitly as state.roomCode might be stale in this closure
-                await addParticipant(state.adminName || 'Admin', 0, code);
+                // Pass 'true' for isAdmin explicitly to avoid state race conditions
+                await addParticipant(state.adminName || 'Admin', 0, code, true);
 
             } else if (error) {
                 console.error('❌ Failed to create room in Supabase:', error);
@@ -584,25 +585,27 @@ export function GameProvider({ children }) {
         }
     };
 
-    const addParticipant = async (name, initialBalance, roomCodeOverride = null) => {
+    const addParticipant = async (name, initialBalance, roomCodeOverride = null, makeAdmin = false) => {
         const localId = generateCode();
         const p = {
             id: localId,
             name,
             balance: initialBalance,
             winnings: 0,
+            isAdmin: makeAdmin, // Optimistic update
             roster: { home: [], away: [] }
         };
         dispatch({ type: 'ADD_PARTICIPANT', payload: p });
 
         // Write to Supabase if connected
         if (isLive && roomIdRef.current) {
-            const isFirstParticipant = state.participants.length === 0;
+            // Use explicit flag if provided, otherwise assume false for joiners
+            // (Only createRoom calls with true)
             const { data, error } = await addParticipantDb(
                 roomIdRef.current,
                 name,
                 initialBalance,
-                isFirstParticipant // First participant is admin
+                makeAdmin
             );
             if (data) {
                 // Update local ID to match Supabase ID for sync
@@ -1016,9 +1019,10 @@ export function GameProvider({ children }) {
                 availablePlayers: room.game_data?.availablePlayers,
                 originalRoster: room.game_data?.originalRoster,
                 lastWinner: room.game_data?.lastWinner,
+                pendingCatchUp: room.game_data?.pendingCatchUp, // CRITICAL: Restore catch-up state
                 winnerId: room.winner_id,
                 myParticipantId: me.id, // Set participant ID for this user
-                isAdmin: me.is_admin, // Preserve admin status from database
+                isAdmin: !!me.is_admin, // Preserve admin status from database (Explicit boolean cast)
                 participants: formattedParticipants // Bulk load transformed participants
             }
         });
