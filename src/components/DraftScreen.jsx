@@ -12,7 +12,7 @@ export default function DraftScreen({ isCatchUp = false }) {
     const hasAway = me?.roster.away?.length > 0;
 
     // Filter available players
-    const players = state.availablePlayers[tab] || [];
+    const players = (state.availablePlayers[tab] || []).sort((a, b) => a.name.localeCompare(b.name));
 
     const handlePick = async (player) => {
         if (pickingId) return; // Prevent double click
