@@ -11,11 +11,6 @@ export default function DraftScreen({ isCatchUp = false }) {
     const hasHome = me?.roster.home?.length > 0;
     const hasAway = me?.roster.away?.length > 0;
 
-    // Auto-Select Tab on Mount/Update (Fixes "Greyed Out" on Refresh)
-    useEffect(() => {
-        if (hasHome && !hasAway) setTab('away');
-    }, [hasHome, hasAway]);
-
     // Filter available players
     const players = state.availablePlayers[tab] || [];
 

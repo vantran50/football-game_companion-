@@ -342,13 +342,6 @@ export function GameProvider({ children }) {
         await updateRoom(state.roomId, { available_players: newAvailable });
     };
 
-    // Manual Admin Override (Fixes Broken Sessions)
-    const forceAdmin = () => {
-        console.log("⚠️ MANUALLY FORCING ADMIN STATUS");
-        dispatch({ type: 'SET_IDENTITY', payload: { id: state.myId, isAdmin: true } });
-        saveSession(state.roomCode, state.myId, true);
-    };
-
     // --- Subscription & Polling ---
     useEffect(() => {
         if (!state.roomId) {
@@ -388,10 +381,8 @@ export function GameProvider({ children }) {
         startDraft,
         startGame,
         handleTouchdown,
-        adminAssignPlayer,
-        forceAdmin
+        // ... (other actions like startDraft, recordTouchdown to be added)
     };
-    // ... (other actions like startDraft, recordTouchdown to be added)
 
     return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
 }

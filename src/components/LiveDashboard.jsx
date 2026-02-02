@@ -2,7 +2,7 @@ import { useGame } from '../context/GameContext';
 import { useState } from 'react';
 
 export default function LiveDashboard() {
-    const { state, handleTouchdown, adminAssignPlayer, forceAdmin } = useGame();
+    const { state, handleTouchdown, adminAssignPlayer } = useGame();
 
     const [assigning, setAssigning] = useState(null); // { pid: 'foo', team: 'home' }
 
@@ -110,16 +110,6 @@ export default function LiveDashboard() {
                     </div>
                 </div>
             )}
-
-            {/* Manual Override for Broken Sessions */}
-            <div className="mt-10 text-center opacity-30 hover:opacity-100 transition">
-                <button
-                    onClick={forceAdmin}
-                    className="text-xs text-slate-500 underline"
-                >
-                    Commissioner Login (Fix Admin rights)
-                </button>
-            </div>
         </div>
     );
 }
