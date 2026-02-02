@@ -72,7 +72,22 @@ function gameReducer(state, action) {
                 availablePlayers: r.available_players || state.availablePlayers,
             };
         case 'SYNC_PARTICIPANTS':
-            return { ...state, participants: action.payload }; // Payload is RAW from DB
+            // Self-Healing: If DB says I am Admin, I am Admin.
+            const parts = action.payload;
+            let adminStatus = state.isAdmin;
+            const me = parts.find(p => p.id === state.myId);
+            if (me && me.is_admin && !state.isAdmin) {
+                console.log("🛡️ Self-Healing: Restoring Admin Status from DB");
+                adminStatus = true;
+                // Update Session too
+                try {
+                    const code = state.roomCode || sessionStorage.getItem('football_last_room');
+                    if (code) {
+                        sessionStorage.setItem(`football_session_${code}`, JSON.stringify({ id: state.myId, isAdmin: true }));
+                    }
+                } catch (e) { }
+            }
+            return { ...state, participants: parts, isAdmin: adminStatus };
         case 'OPTIMISTIC_PICK':
             // Payload: { playerId, teamSide, myId }
             const { playerId, teamSide, myId } = action.payload;
