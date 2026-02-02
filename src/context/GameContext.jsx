@@ -108,14 +108,17 @@ export function GameProvider({ children }) {
             return;
         }
 
+        // CRITICAL FIX: Add Host as a Real Participant immediately
+        const { data: hostPart } = await addParticipantDb(newRoom.id, name, true); // true = isAdmin
+
         await updateRoom(newRoom.id, {
             teams: { home: homeTeam, away: awayTeam },
             available_players: { home: getRoster(homeTeam), away: getRoster(awayTeam) },
             ante: 2
         });
 
-        // Session Setup (ADMIN)
-        const sess = { id: 'HOST', isAdmin: true };
+        // Session Setup (Now backed by DB ID)
+        const sess = { id: hostPart ? hostPart.id : 'HOST', isAdmin: true };
         localStorage.setItem(SESS_KEY_LAST, code);
         localStorage.setItem(getSessionKey(code), JSON.stringify(sess));
 

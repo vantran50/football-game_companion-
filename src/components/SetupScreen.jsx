@@ -1,7 +1,7 @@
 import { useGame } from '../context/GameContext';
 
 export default function SetupScreen() {
-    const { state, startDraft } = useGame();
+    const { state, startDraft, forceAdmin } = useGame();
 
     // If I'm not admin, show waiting
     if (!state.isAdmin) {
@@ -13,6 +13,17 @@ export default function SetupScreen() {
                 <div className="mt-8 px-4 py-2 bg-slate-900 rounded-lg border border-slate-700 font-mono">
                     Room: {state.roomCode}
                 </div>
+                <button
+                    onClick={() => {
+                        if (confirm("Are you sure you are the Host? This will force Admin controls.")) {
+                            forceAdmin();
+                            window.location.reload();
+                        }
+                    }}
+                    className="mt-8 text-slate-600 text-xs underline hover:text-slate-400"
+                >
+                    (Stuck? Recover Host Session)
+                </button>
             </div>
         );
     }
