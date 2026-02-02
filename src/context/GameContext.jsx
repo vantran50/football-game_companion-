@@ -219,7 +219,8 @@ export function GameProvider({ children }) {
 
             // Verify participant still exists in DB?
             // For now, trust local storage for speed but handle fetch
-            dispatch({ type: 'SET_IDENTITY', payload: { id: session.id, isAdmin: session.isAdmin } });
+            const restoredAdmin = session.isAdmin || session.id === 'HOST';
+            dispatch({ type: 'SET_IDENTITY', payload: { id: session.id, isAdmin: restoredAdmin } });
             dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: lastCode } });
             roomIdRef.current = room.id;
 
