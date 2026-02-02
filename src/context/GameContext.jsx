@@ -169,9 +169,12 @@ export function GameProvider({ children }) {
         const { data: p, error: pError } = await addParticipantDb(room.id, name, false);
         if (pError) { console.error(pError); return; }
 
+        // Preserve Admin status if already Admin (Host joining as Player)
+        const keepAdmin = state.isAdmin;
+
         // Save Identity
-        saveSession(code, p.id, false);
-        dispatch({ type: 'SET_IDENTITY', payload: { id: p.id, isAdmin: false } });
+        saveSession(code, p.id, keepAdmin);
+        dispatch({ type: 'SET_IDENTITY', payload: { id: p.id, isAdmin: keepAdmin } });
         dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: code } });
         roomIdRef.current = room.id;
 
