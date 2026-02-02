@@ -1,387 +1,256 @@
-import { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import {
     createRoomDb, getRoomByCode, addParticipantDb,
-    subscribeToRoom, updateRoom, updateParticipant, getParticipantsByRoom
+    updateRoom, updateParticipant, getParticipantsByRoom
 } from '../lib/supabaseClient';
 import { getRoster } from '../lib/nfl';
 
 const GameContext = createContext();
 
-const getInitialState = () => {
-    const base = {
-        roomId: null,
-        roomCode: null,
-        phase: 'SETUP',
-        draftPhase: 'HOME',
-        currentTurnIndex: 0,
-        ante: 0,
-        pot: 0,
-        teams: { home: '', away: '' },
-        availablePlayers: { home: [], away: [] },
-        participants: [],
-        myId: null,
-        isAdmin: false,
-        connectionStatus: 'IDLE', // IDLE, REJOINING, CONNECTED, ERROR
-        lastError: null
-    };
-
-    // Synchronous Restore
-    try {
-        const lastCode = sessionStorage.getItem('football_last_room');
-        if (lastCode) {
-            const session = JSON.parse(sessionStorage.getItem(`football_session_${lastCode}`));
-            if (session) {
-                return {
-                    ...base,
-                    myId: session.id,
-                    isAdmin: session.isAdmin,
-                    roomCode: lastCode,
-                    connectionStatus: 'REJOINING' // Assume we try to rejoin immediately
-                };
-            }
-        }
-    } catch (e) { console.error('Storage init error', e); }
-
-    return base;
-};
-
-// --- Reducer (DUMB State Replacer) ---
-function gameReducer(state, action) {
-    switch (action.type) {
-        case 'SET_STATUS':
-            return { ...state, connectionStatus: action.payload, lastError: action.error || null };
-        case 'SET_IDENTITY':
-            return { ...state, myId: action.payload.id, isAdmin: action.payload.isAdmin };
-        case 'JOIN_SUCCESS':
-            return {
-                ...state,
-                roomId: action.payload.roomId,
-                roomCode: action.payload.roomCode,
-                connectionStatus: 'CONNECTED'
-            };
-        case 'SYNC_ROOM':
-            const r = action.payload;
-            return {
-                ...state,
-                phase: r.phase,
-                pot: r.pot,
-                ante: r.ante,
-                draftPhase: r.draft_phase || 'HOME', // Note: mapped from snake_case
-                currentTurnIndex: r.current_turn_index,
-                teams: r.teams || state.teams,
-                availablePlayers: r.available_players || state.availablePlayers,
-            };
-        case 'SYNC_PARTICIPANTS':
-            // Self-Healing: If DB says I am Admin, I am Admin.
-            const parts = action.payload;
-            let adminStatus = state.isAdmin;
-            const me = parts.find(p => p.id === state.myId);
-            if (me && me.is_admin && !state.isAdmin) {
-                console.log("🛡️ Self-Healing: Restoring Admin Status from DB");
-                adminStatus = true;
-                // Update Session too
-                try {
-                    const code = state.roomCode || sessionStorage.getItem('football_last_room');
-                    if (code) {
-                        sessionStorage.setItem(`football_session_${code}`, JSON.stringify({ id: state.myId, isAdmin: true }));
-                    }
-                } catch (e) { }
-            }
-            return { ...state, participants: parts, isAdmin: adminStatus };
-        case 'OPTIMISTIC_PICK':
-            // Payload: { playerId, teamSide, myId }
-            const { playerId, teamSide, myId } = action.payload;
-
-            // 1. Remove from Available
-            const newAvail = {
-                ...state.availablePlayers,
-                [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== playerId)
-            };
-
-            // 2. Add to My Roster (in participants)
-            // Note: We are modifying the RAW participants array
-            const newParts = state.participants.map(p => {
-                if (p.id !== myId) return p;
-
-                // Construct new raw roster
-                const currentRaw = (teamSide === 'home') ? (p.roster_home || []) : (p.roster_away || []);
-                const newRaw = [...currentRaw, state.availablePlayers[teamSide].find(pl => pl.id === playerId)];
-
-                return {
-                    ...p,
-                    [teamSide === 'home' ? 'roster_home' : 'roster_away']: newRaw
-                };
-            });
-
-            return {
-                ...state,
-                availablePlayers: newAvail,
-                participants: newParts
-            };
-
-        case 'RESET':
-            return getInitialState();
-        default:
-            return state;
-    }
-}
+// SESSION KEYS
+const SESS_KEY_LAST = 'football_last_room';
+const getSessionKey = (code) => `football_session_${code}`;
 
 export function GameProvider({ children }) {
-    const [state, dispatch] = useReducer(gameReducer, undefined, getInitialState);
-    const roomIdRef = useRef(null);
+    // --- GLOBAL STATE ---
+    const [room, setRoom] = useState(null);
+    const [participants, setParticipants] = useState([]);
+    const [identity, setIdentity] = useState({ id: null, isAdmin: false });
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-    // --- Actions ---
+    // Derived State
+    const myId = identity.id;
+    const isAdmin = identity.isAdmin;
 
-    // Format helper (Running on every render to ensure safety)
-    const formattedParticipants = (state.participants || []).map(p => ({
-        ...p,
-        // SAFE ACCESS: Handle nulls/undefined from DB
-        roster: {
-            home: Array.isArray(p.roster_home) ? p.roster_home : [],
-            away: Array.isArray(p.roster_away) ? p.roster_away : []
-        },
-        isAdmin: !!p.is_admin
-    }));
+    // --- CORE SYNC ENGINE ---
+    const sync = async () => {
+        // 1. Get Room Code from Session
+        const code = sessionStorage.getItem(SESS_KEY_LAST);
+        if (!code) {
+            setLoading(false);
+            return;
+        }
 
-    const saveSession = (code, id, isAdmin) => {
-        sessionStorage.setItem(`football_session_${code}`, JSON.stringify({ id, isAdmin }));
-        sessionStorage.setItem('football_last_room', code);
+        // 2. Load Identity from Session (TRUST LOCAL STORAGE)
+        try {
+            const stored = JSON.parse(sessionStorage.getItem(getSessionKey(code)));
+            if (stored && (stored.id !== identity.id || stored.isAdmin !== identity.isAdmin)) {
+                setIdentity(stored); // Update local identity match
+            }
+        } catch (e) { }
+
+        // 3. Fetch Data (Server Authoritative)
+        const { data: serverRoom, error: rErr } = await getRoomByCode(code);
+        if (rErr || !serverRoom) {
+            // Room might be gone or error
+            // Don't nuke session immediately to avoid flickering, but stop loading
+            setLoading(false);
+            return;
+        }
+
+        const { data: serverParts, error: pErr } = await getParticipantsByRoom(serverRoom.id);
+
+        // 4. Update State
+        setRoom(serverRoom);
+        if (serverParts) setParticipants(serverParts);
+        setLoading(false);
     };
 
-    const createRoom = async (adminName, homeTeam, awayTeam) => {
+    // --- POLLING LOOP ---
+    useEffect(() => {
+        // Initial load
+        sync();
+
+        // Loop (1 second - Aggressive Sync)
+        const interval = setInterval(sync, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // --- ACTIONS ---
+
+    const createRoom = async (name, homeTeam, awayTeam) => {
         const code = generateCode();
-        // Create Room
-        const { data: room, error } = await createRoomDb(code);
-        if (error) { console.error(error); return; }
+        // DB Setup
+        const { data: newRoom, error } = await createRoomDb(code);
+        if (error) { alert("Error creating room"); return; }
 
-        // Populate Players
-        const homeRoster = getRoster(homeTeam);
-        const awayRoster = getRoster(awayTeam);
-
-        // Update basic room data + players
-        await updateRoom(room.id, {
+        await updateRoom(newRoom.id, {
             teams: { home: homeTeam, away: awayTeam },
-            available_players: { home: homeRoster, away: awayRoster },
-            ante: 2 // Default Ante
+            available_players: { home: getRoster(homeTeam), away: getRoster(awayTeam) },
+            ante: 2
         });
 
-        // Save Identity (ADMIN HOST ONLY - No Participant Row yet)
-        // User can join later if they want to play.
-        saveSession(code, 'HOST', true);
-        dispatch({ type: 'SET_IDENTITY', payload: { id: 'HOST', isAdmin: true } });
-        dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: code } });
-        roomIdRef.current = room.id;
+        // Session Setup (ADMIN)
+        const sess = { id: 'HOST', isAdmin: true };
+        sessionStorage.setItem(SESS_KEY_LAST, code);
+        sessionStorage.setItem(getSessionKey(code), JSON.stringify(sess));
 
-        // Initial Participant Sync (Empty)
-        dispatch({ type: 'SYNC_PARTICIPANTS', payload: [] });
+        // Instant Sync
+        setIdentity(sess);
+        await sync();
     };
 
     const joinRoom = async (code, name) => {
-        const { data: room, error } = await getRoomByCode(code);
-        if (!room) { alert('Room not found'); return; }
+        // 1. Check Room
+        const { data: r } = await getRoomByCode(code);
+        if (!r) { alert("Room not found"); return; }
 
-        // Create Participant
-        const { data: p, error: pError } = await addParticipantDb(room.id, name, false);
-        if (pError) { console.error(pError); return; }
+        // 2. Create Participant
+        const { data: p } = await addParticipantDb(r.id, name, false);
+        if (!p) return;
 
-        // Preserve Admin status if already Admin (Host joining as Player)
-        const keepAdmin = state.isAdmin;
+        // 3. Session Setup (PLAYER)
+        // CHECK: Was I already Admin? (Host joining as player)
+        let newIsAdmin = false;
+        try {
+            const oldSess = JSON.parse(sessionStorage.getItem(getSessionKey(code)));
+            if (oldSess && oldSess.isAdmin) newIsAdmin = true;
+        } catch (e) { }
 
-        // Save Identity
-        saveSession(code, p.id, keepAdmin);
-        dispatch({ type: 'SET_IDENTITY', payload: { id: p.id, isAdmin: keepAdmin } });
-        dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: code } });
-        roomIdRef.current = room.id;
+        const sess = { id: p.id, isAdmin: newIsAdmin };
+        sessionStorage.setItem(SESS_KEY_LAST, code);
+        sessionStorage.setItem(getSessionKey(code), JSON.stringify(sess));
 
-        // Initial Fetch
-        const { data: parts } = await getParticipantsByRoom(room.id);
-        if (parts) {
-            console.log('✅ Initial Join Participants Fetch:', parts);
-            dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
-        }
-
-        // Initial Room Data Sync (CRITICAL FIX)
-        dispatch({ type: 'SYNC_ROOM', payload: room });
+        // Instant Sync
+        setIdentity(sess);
+        await sync();
     };
 
-    const rejoin = async () => {
-        const lastCode = sessionStorage.getItem('football_last_room');
-        if (!lastCode) return;
-        const session = JSON.parse(sessionStorage.getItem(`football_session_${lastCode}`));
-        if (!session) return;
+    // DRAFTING
+    const makePick = async (player, teamSide) => {
+        // Pessimistic Check
+        if (!room) return false;
 
-        console.log('🔄 Rejoining Session:', session);
-        dispatch({ type: 'SET_STATUS', payload: 'REJOINING' });
-
-        try {
-            const { data: room } = await getRoomByCode(lastCode);
-            if (!room) throw new Error('Room not found or expired.');
-
-            // Verify participant still exists in DB?
-            // For now, trust local storage for speed but handle fetch
-            const restoredAdmin = session.isAdmin || session.id === 'HOST';
-            dispatch({ type: 'SET_IDENTITY', payload: { id: session.id, isAdmin: restoredAdmin } });
-            dispatch({ type: 'JOIN_SUCCESS', payload: { roomId: room.id, roomCode: lastCode } });
-            roomIdRef.current = room.id;
-
-            // Initial Fetch
-            const { data: parts } = await getParticipantsByRoom(room.id);
-            if (parts) {
-                console.log('🔄 Rejoin Participants Fetch:', parts.length);
-                dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
-            } else {
-                console.error('⚠️ Rejoin fetched 0 participants or failed.');
-            }
-
-            // Initial Room Data Sync (CRITICAL FIX)
-            dispatch({ type: 'SYNC_ROOM', payload: room });
-        } catch (e) {
-            console.error('Rejoin Error:', e);
-            dispatch({ type: 'SET_STATUS', payload: 'ERROR', error: e.message });
+        // 1. Validations
+        const currentPool = room.available_players[teamSide] || [];
+        if (!currentPool.find(p => p.id === player.id)) {
+            alert("Player taken!");
+            await sync();
+            return false;
         }
+
+        // 2. DB Update (Participant)
+        const me = participants.find(p => p.id === myId);
+        if (!me) return false;
+
+        const currentRoster = (teamSide === 'home' ? me.roster_home : me.roster_away) || [];
+        const newRoster = [...currentRoster, player];
+
+        await updateParticipant(me.id, {
+            [teamSide === 'home' ? 'roster_home' : 'roster_away']: newRoster
+        });
+
+        // 3. DB Update (Room)
+        const newPool = currentPool.filter(p => p.id !== player.id);
+        const { error } = await updateRoom(room.id, {
+            available_players: { ...room.available_players, [teamSide]: newPool },
+            current_turn_index: room.current_turn_index + 1
+        });
+
+        if (error) {
+            alert("Draft Error");
+            return false;
+        }
+
+        // 4. Force Sync
+        await sync();
+        return true;
+    };
+
+    const adminAssignPlayer = async (targetId, player, teamSide) => {
+        if (!isAdmin || !room) return;
+
+        const target = participants.find(p => p.id === targetId);
+        if (!target) return;
+
+        // Add to Target
+        const currentRoster = (teamSide === 'home' ? target.roster_home : target.roster_away) || [];
+        await updateParticipant(targetId, {
+            [teamSide === 'home' ? 'roster_home' : 'roster_away']: [...currentRoster, player]
+        });
+
+        // Remove from Pool
+        const currentPool = room.available_players[teamSide] || [];
+        const newPool = currentPool.filter(p => p.id !== player.id);
+        await updateRoom(room.id, {
+            available_players: { ...room.available_players, [teamSide]: newPool }
+        });
+
+        await sync();
     };
 
     const startDraft = async () => {
-        if (!state.isAdmin) return;
-        // Deduct Ante from everyone? (Simplified: Just start draft)
-        // Switch to DRAFT phase
-        await updateRoom(state.roomId, { phase: 'DRAFT', current_turn_index: 0 });
-    };
-
-    const makePick = async (player, teamSide) => {
-        // 1. Validation (Prevent Stale Picks)
-        const isAvailable = state.availablePlayers[teamSide]?.some(p => p.id === player.id);
-        if (!isAvailable) {
-            alert("Player is no longer available.");
-            return false;
-        }
-
-        const me = state.participants.find(p => p.id === state.myId);
-        if (!me) return false;
-
-        // 0. OPTIMISTIC UPDATE
-        dispatch({ type: 'OPTIMISTIC_PICK', payload: { playerId: player.id, teamSide, myId: state.myId } });
-
-        // 1. DB Updates
-        const newRoster = { ...me.roster, [teamSide]: [...(me.roster[teamSide] || []), player] };
-        let updatesPart = {};
-        if (teamSide === 'home') updatesPart.roster_home = newRoster.home;
-        if (teamSide === 'away') updatesPart.roster_away = newRoster.away;
-
-        try {
-            const { error: partError } = await updateParticipant(me.id, updatesPart);
-            if (partError) throw partError;
-
-            // Fetch latest room data (Race Protection)
-            const { data: latestRoom } = await getRoomByCode(state.roomCode);
-
-            let sourceAvailable = state.availablePlayers;
-            let currentTurn = state.currentTurnIndex;
-
-            if (latestRoom) {
-                sourceAvailable = latestRoom.available_players;
-                currentTurn = latestRoom.current_turn_index;
-            }
-
-            const newAvailable = {
-                ...sourceAvailable,
-                [teamSide]: (sourceAvailable[teamSide] || []).filter(p => p.id !== player.id)
-            };
-
-            const updatesRoom = { available_players: newAvailable, current_turn_index: currentTurn + 1 };
-
-            const { error: roomError } = await updateRoom(state.roomId, updatesRoom);
-            if (roomError) throw roomError;
-
-            return true; // Success
-        } catch (e) {
-            alert("Draft Failed: " + e.message + "\n(Hint: Run the fix_permissions.sql script in Supabase)");
-            console.error(e);
-            return false;
-        }
+        if (!isAdmin || !room) return;
+        await updateRoom(room.id, { phase: 'DRAFT', current_turn_index: 0 });
+        await sync();
     };
 
     const startGame = async () => {
-        if (!state.isAdmin) return;
-        await updateRoom(state.roomId, { phase: 'LIVE' });
+        if (!isAdmin || !room) return;
+        await updateRoom(room.id, { phase: 'LIVE' });
+        await sync();
     };
 
     const handleTouchdown = async (teamSide) => {
-        const originalHome = getRoster(state.teams.home);
-        const originalAway = getRoster(state.teams.away);
+        if (!isAdmin || !room) return;
+        // Reset Everyone
+        const originalHome = getRoster(room.teams.home);
+        const originalAway = getRoster(room.teams.away);
 
-        const clearPromises = state.participants.map(p =>
+        const promises = participants.map(p =>
             updateParticipant(p.id, { roster_home: [], roster_away: [] })
         );
-        await Promise.all(clearPromises);
+        await Promise.all(promises);
 
-        await updateRoom(state.roomId, {
+        await updateRoom(room.id, {
             phase: 'DRAFT',
             available_players: { home: originalHome, away: originalAway },
             current_turn_index: 0
         });
+        await sync();
     };
 
-    const adminAssignPlayer = async (targetId, player, teamSide) => {
-        if (!state.isAdmin) return;
-        const target = state.participants.find(p => p.id === targetId);
-        if (!target) return;
-
-        // Update Roster
-        const newRoster = { ...target.roster, [teamSide]: [...(target.roster[teamSide] || []), player] };
-        let updatesPart = {};
-        if (teamSide === 'home') updatesPart.roster_home = newRoster.home;
-        if (teamSide === 'away') updatesPart.roster_away = newRoster.away;
-        await updateParticipant(targetId, updatesPart);
-
-        // Update Room (Remove from pool)
-        const newAvailable = {
-            ...state.availablePlayers,
-            [teamSide]: state.availablePlayers[teamSide].filter(p => p.id !== player.id)
-        };
-        await updateRoom(state.roomId, { available_players: newAvailable });
+    // Emergency Fix Action
+    const forceAdmin = () => {
+        if (!room) return;
+        const code = room.code;
+        const newSess = { id: myId, isAdmin: true };
+        sessionStorage.setItem(getSessionKey(code), JSON.stringify(newSess));
+        setIdentity(newSess);
     };
 
-    // --- Subscription & Polling ---
-    useEffect(() => {
-        if (!state.roomId) {
-            rejoin();
-            return;
-        }
+    // --- FORMATTING ---
+    const formattedParticipants = participants.map(p => ({
+        ...p,
+        roster: {
+            home: p.roster_home || [],
+            away: p.roster_away || []
+        },
+        isAdmin: !!p.is_admin
+    }));
 
-        // 1. Realtime Subscription (Fastest)
-        const unsub = subscribeToRoom(
-            state.roomId,
-            (room) => dispatch({ type: 'SYNC_ROOM', payload: room }),
-            (parts) => dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts })
-        );
-
-        // 2. Polling Fallback (Reliable)
-        // Fixes "Phone not syncing" if Realtime is disabled on server
-        const intervalId = setInterval(async () => {
-            const { data: room } = await getRoomByCode(state.roomCode);
-            if (room) {
-                dispatch({ type: 'SYNC_ROOM', payload: room });
-                const { data: parts } = await getParticipantsByRoom(room.id);
-                if (parts) dispatch({ type: 'SYNC_PARTICIPANTS', payload: parts });
-            }
-        }, 1500); // 1.5 seconds (Faster Sync)
-
-        return () => {
-            if (unsub) unsub();
-            clearInterval(intervalId);
-        };
-    }, [state.roomId]);
-
+    // --- EXPORT ---
     const value = {
-        state: { ...state, participants: formattedParticipants }, // Expose formatted
+        state: {
+            roomCode: room?.code,
+            roomId: room?.id,
+            phase: room?.phase || 'SETUP',
+            participants: formattedParticipants,
+            myId: myId,
+            isAdmin: isAdmin,
+            availablePlayers: room?.available_players || { home: [], away: [] },
+            teams: room?.teams || { home: '', away: '' },
+            loading: loading
+        },
         createRoom,
         joinRoom,
         makePick,
         startDraft,
         startGame,
         handleTouchdown,
-        // ... (other actions like startDraft, recordTouchdown to be added)
+        adminAssignPlayer,
+        forceAdmin
     };
 
     return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
@@ -389,7 +258,6 @@ export function GameProvider({ children }) {
 
 export const useGame = () => useContext(GameContext);
 
-// Import helper
 function generateCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let code = '';
