@@ -99,6 +99,12 @@ export function GameProvider({ children }) {
     // --- ACTIONS ---
 
     const createRoom = async (name, homeTeam, awayTeam) => {
+        // 1. CLOSE ALL OTHER ROOMS (Nuclear Cleanup)
+        // User Rule: "When I create a new room, it closes all other rooms from use"
+        // We wipe the browser memory completely so it IMPOSSIBLE to rejoin an old room.
+        localStorage.clear();
+        sessionStorage.clear();
+
         const code = generateCode();
         // DB Setup
         const { data: newRoom, error } = await createRoomDb(code);
