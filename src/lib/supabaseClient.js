@@ -14,11 +14,7 @@ export async function createRoomDb(code, adminName) {
         .insert({
             code,
             phase: 'SETUP',
-            ante: 0,
-            pot: 0,
-            current_turn_index: 0,
-            teams: { home: '', away: '' },
-            available_players: { home: [], away: [] }
+            ante: 2
         })
         .select()
         .single();

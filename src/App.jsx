@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { GameProvider, useGame } from './context/GameContext';
 import SetupScreen from './components/SetupScreen';
 import DraftScreen from './components/DraftScreen';
@@ -8,10 +9,8 @@ function GameRouter() {
     const { state } = useGame();
 
     // 1. Initial Identity Recovery (Handled by Context Sync)
-    useEffect(() => {
-        // Nuke legacy storage to prevent conflicts
-        try { localStorage.clear(); } catch (e) { }
-    }, []);
+    // Legacy cleanup removed to verify persistence
+    useEffect(() => { }, []);
 
     // 2. Loading State
     if (state.loading) {

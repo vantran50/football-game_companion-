@@ -26,7 +26,7 @@ export function GameProvider({ children }) {
     // --- CORE SYNC ENGINE ---
     const sync = async () => {
         // 1. Get Room Code from Session
-        const code = sessionStorage.getItem(SESS_KEY_LAST);
+        const code = localStorage.getItem(SESS_KEY_LAST);
         if (!code) {
             setLoading(false);
             return;
@@ -34,7 +34,7 @@ export function GameProvider({ children }) {
 
         // 2. Load Identity from Session (TRUST LOCAL STORAGE)
         try {
-            const stored = JSON.parse(sessionStorage.getItem(getSessionKey(code)));
+            const stored = JSON.parse(localStorage.getItem(getSessionKey(code)));
             if (stored && (stored.id !== identity.id || stored.isAdmin !== identity.isAdmin)) {
                 setIdentity(stored); // Update local identity match
             }
@@ -73,7 +73,11 @@ export function GameProvider({ children }) {
         const code = generateCode();
         // DB Setup
         const { data: newRoom, error } = await createRoomDb(code);
-        if (error) { alert("Error creating room"); return; }
+        if (error) {
+            console.error("Create Room Error:", error);
+            alert("Error creating room: " + (error.message || JSON.stringify(error)));
+            return;
+        }
 
         await updateRoom(newRoom.id, {
             teams: { home: homeTeam, away: awayTeam },
@@ -83,8 +87,8 @@ export function GameProvider({ children }) {
 
         // Session Setup (ADMIN)
         const sess = { id: 'HOST', isAdmin: true };
-        sessionStorage.setItem(SESS_KEY_LAST, code);
-        sessionStorage.setItem(getSessionKey(code), JSON.stringify(sess));
+        localStorage.setItem(SESS_KEY_LAST, code);
+        localStorage.setItem(getSessionKey(code), JSON.stringify(sess));
 
         // Instant Sync
         setIdentity(sess);
@@ -104,13 +108,13 @@ export function GameProvider({ children }) {
         // CHECK: Was I already Admin? (Host joining as player)
         let newIsAdmin = false;
         try {
-            const oldSess = JSON.parse(sessionStorage.getItem(getSessionKey(code)));
+            const oldSess = JSON.parse(localStorage.getItem(getSessionKey(code)));
             if (oldSess && oldSess.isAdmin) newIsAdmin = true;
         } catch (e) { }
 
         const sess = { id: p.id, isAdmin: newIsAdmin };
-        sessionStorage.setItem(SESS_KEY_LAST, code);
-        sessionStorage.setItem(getSessionKey(code), JSON.stringify(sess));
+        localStorage.setItem(SESS_KEY_LAST, code);
+        localStorage.setItem(getSessionKey(code), JSON.stringify(sess));
 
         // Instant Sync
         setIdentity(sess);
@@ -216,7 +220,7 @@ export function GameProvider({ children }) {
         if (!room) return;
         const code = room.code;
         const newSess = { id: myId, isAdmin: true };
-        sessionStorage.setItem(getSessionKey(code), JSON.stringify(newSess));
+        localStorage.setItem(getSessionKey(code), JSON.stringify(newSess));
         setIdentity(newSess);
     };
 
