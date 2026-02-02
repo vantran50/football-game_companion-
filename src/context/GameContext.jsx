@@ -51,9 +51,38 @@ export function GameProvider({ children }) {
 
         const { data: serverParts, error: pErr } = await getParticipantsByRoom(serverRoom.id);
 
-        // 4. Update State
-        setRoom(serverRoom);
-        if (serverParts) setParticipants(serverParts);
+        // 4. Update State (Deep Compare to prevent thrashing)
+        setRoom(prev => {
+            if (JSON.stringify(prev) !== JSON.stringify(serverRoom)) return serverRoom;
+            return prev;
+        });
+
+        let currentParts = participants; // Default to existing
+        if (serverParts) {
+            setParticipants(prev => {
+                // If data is identical, keep old reference to prevent re-renders
+                if (JSON.stringify(prev) !== JSON.stringify(serverParts)) {
+                    currentParts = serverParts; // Update local ref for self-healing
+                    return serverParts;
+                }
+                currentParts = prev;
+                return prev;
+            });
+
+            // 5. SELF-HEALING IDENTITY (The "God Fix")
+            // If DB says I am Admin, I am Admin. No matter what LocalStorage says.
+            // We use 'stored' (from Step 2) or fallback to current identity state (careful of closures)
+            const currentStored = JSON.parse(localStorage.getItem(getSessionKey(code))) || identity;
+            const me = serverParts.find(p => p.id === currentStored.id);
+
+            if (me && me.is_admin && !currentStored.isAdmin) {
+                console.log("🛡️ Self-Healing: Restoring Admin Status from DB");
+                const fixedIdentity = { ...currentStored, isAdmin: true };
+                localStorage.setItem(getSessionKey(code), JSON.stringify(fixedIdentity));
+                setIdentity(fixedIdentity);
+            }
+        }
+
         setLoading(false);
     };
 
